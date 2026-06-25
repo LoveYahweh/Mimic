@@ -107,20 +107,25 @@ then `@testable import MyApp` to use it.
 
 ## Supported
 
-Sync / `async` / `throws` / typed `throws` methods · `inout`, variadic-free closure, tuple,
-optional, and defaulted parameters · `mutating` requirements · `static` requirements ·
-overloads (by label, arity, type, or async-ness) · get-only / get-set / optional / collection
-properties · access-level mirroring.
+Sync / `async` / `throws` / typed `throws` methods · **generic methods** (type-erased) ·
+**variadic**, `inout`, closure, tuple, optional, and defaulted parameters · `mutating`
+requirements · `static` requirements · overloads (by label, arity, type, or async-ness) ·
+get-only / get-set / optional / collection properties · access-level mirroring.
+
+Generic methods are type-erased: the handler trades in `Any` and the result is force-cast
+back to the requested type, so `let x: Int = mock.decode("1")` works while keeping the
+mock storable.
 
 ## Current limitations
 
 On the [roadmap](ROADMAP.md):
 
-- **Generic methods** (`func decode<T>(_:) -> T`) aren't generated yet.
-- **Variadic parameters** (`Int...`) and **`subscript`** requirements aren't generated.
-- Inherited / composed protocol requirements aren't walked.
-- `init` and `associatedtype` requirements, `rethrows`, and effectful property accessors
-  (`{ get async throws }`) aren't supported.
+- **`subscript`** and **`rethrows`** requirements aren't generated yet.
+- `init` and `associatedtype` requirements, and effectful property accessors
+  (`{ get async throws }`), aren't supported.
+- **Inherited / composed protocols** can't be supported by a peer macro: it only sees the
+  annotated protocol's own syntax, never the parent's members. Re-declare (or annotate the
+  parent and compose) instead.
 
 ## Running the tests
 

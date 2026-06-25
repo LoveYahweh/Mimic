@@ -106,6 +106,52 @@ final class MacroExpansionTests: XCTestCase {
         )
     }
 
+    func testErasesGenericMethod() {
+        assertMacroExpansion(
+            """
+            @Mockable
+            protocol Box {
+                func unwrap<T>(_ raw: String) -> T
+            }
+            """,
+            expandedSource: """
+            protocol Box {
+                func unwrap<T>(_ raw: String) -> T
+            }
+
+            final class MockBox: Box {
+                init() {
+                }
+
+                var unwrapHandler: ((String) -> Any)?
+                private(set) var unwrapCallCount = 0
+                private(set) var unwrapCalls: [String] = []
+                var unwrapWasCalled: Bool {
+                    unwrapCallCount > 0
+                }
+                var unwrapLastCall: Optional<String> {
+                    unwrapCalls.last
+                }
+                func unwrap<T>(_ raw: String) -> T {
+                    unwrapCallCount += 1
+                    unwrapCalls.append(raw)
+                    guard let unwrapHandler else {
+                        fatalError("MockBox.unwrap needs `unwrapHandler` to be set.")
+                    }
+                    return unwrapHandler(raw) as! T
+                }
+
+                func mimicReset() {
+                    unwrapHandler = nil
+                    unwrapCallCount = 0
+                    unwrapCalls = []
+                }
+            }
+            """,
+            macros: macros
+        )
+    }
+
     func testDiagnosesNonProtocol() {
         assertMacroExpansion(
             """

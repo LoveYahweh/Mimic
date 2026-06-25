@@ -106,6 +106,15 @@ private func functionMembers(
     let returnTypeSyntax = signature.returnClause?.type
     let returnType = returnTypeSyntax?.trimmedDescription
 
+    // Generic methods can't be stored as concrete closures, so any type that
+    // mentions a generic parameter is erased to `Any` in storage and force-cast
+    // back inside the method body. The method signature keeps its generics intact.
+    let genericNames = Set(function.genericParameterClause?.parameters.map { $0.name.text } ?? [])
+    let genericClause = function.genericParameterClause?.trimmedDescription ?? ""
+    let whereClause = function.genericWhereClause.map { " \($0.trimmedDescription)" } ?? ""
+    let returnIsGeneric = returnType.map { referencesGeneric($0, genericNames) } ?? false
+    let handlerReturn = returnIsGeneric ? "Any" : (returnType ?? "Void")
+
     // Effects are copied verbatim so typed throws (`throws(MyError)`) survives.
     let isAsync = signature.effectSpecifiers?.asyncSpecifier != nil
     let throwsClause = signature.effectSpecifiers?.throwsClause
@@ -115,14 +124,30 @@ private func functionMembers(
     let params: [Param] = signature.parameterClause.parameters.map { p in
         let first = p.firstName.text
         let second = p.secondName?.text
-        let bare = strippedType(p.type)
-        let isInout = bare.hasPrefix("inout ")
+        let elementType = p.type.trimmedDescription
+        let isVariadic = p.ellipsis != nil
+        let attrStripped = strippedType(p.type)           // drops @escaping, keeps inout
+        let isInout = attrStripped.hasPrefix("inout ")
+        let noInout = isInout ? String(attrStripped.dropFirst("inout ".count)) : attrStripped
+        let isGeneric = referencesGeneric(noInout, genericNames)
+
+        // The type as written in the conforming method (keeps `...`, `inout`, etc).
+        let signatureType = isVariadic ? "\(elementType)..." : p.type.trimmedDescription
+        // The stored-closure parameter type: a variadic becomes an array, a
+        // generic becomes `Any`, and `inout` is preserved.
+        let closureType: String
+        if isGeneric { closureType = isInout ? "inout Any" : "Any" }
+        else if isVariadic { closureType = "[\(elementType)]" }
+        else { closureType = attrStripped }
+        // The recorded element type is the same but never `inout`.
+        let recordType = isGeneric ? "Any" : (isVariadic ? "[\(elementType)]" : noInout)
+
         return Param(
             label: first == "_" ? nil : first,
             name: second ?? first,
-            type: p.type.trimmedDescription,
-            bareType: bare,
-            recordType: isInout ? String(bare.dropFirst("inout ".count)) : bare,
+            type: signatureType,
+            bareType: closureType,
+            recordType: recordType,
             isInout: isInout
         )
     }
@@ -141,7 +166,7 @@ private func functionMembers(
     // Parameter attributes like `@escaping` are stripped — they're illegal inside
     // a stored function type, but completion-handler params still work.
     let closureParams = params.map(\.bareType).joined(separator: ", ")
-    let handlerType = "((\(closureParams))\(effects) -> \(returnType ?? "Void"))?"
+    let handlerType = "((\(closureParams))\(effects) -> \(handlerReturn))?"
 
     // Call-recording storage.
     var storage = """
@@ -178,8 +203,9 @@ private func functionMembers(
     }
 
     // `…ReturnValue` shorthand: assigning it stubs a handler that ignores the
-    // arguments and returns the value, so trivial stubs need no closure.
-    if let returnType, returnType != "Void" {
+    // arguments and returns the value, so trivial stubs need no closure. Skipped
+    // for generic returns, which have no single concrete type to store.
+    if let returnType, returnType != "Void", !returnIsGeneric {
         let ignored = params.isEmpty ? "" : params.map { _ in "_" }.joined(separator: ", ") + " in "
         storage += """
 
@@ -217,16 +243,19 @@ private func functionMembers(
 
     let invocation: String
     if let returnType, returnType != "Void" {
-        // Methods returning an optional or a collection fall back to an empty
-        // value when unstubbed; anything else traps so a missing stub is loud.
-        let fallback = returnTypeSyntax.flatMap(defaultReturn(for:))
+        // A generic return is erased to `Any` in the handler and force-cast back.
+        // Otherwise an optional or collection return falls back to an empty value
+        // when unstubbed; anything else traps so a missing stub is loud.
+        let cast = returnIsGeneric ? " as! \(returnType)" : ""
+        let fallback = returnIsGeneric ? nil : returnTypeSyntax.flatMap(defaultReturn(for:))
+        let hint = returnIsGeneric ? "`\(memberPrefix)Handler`" : "`\(memberPrefix)ReturnValue` or `\(memberPrefix)Handler`"
         let missingHandler = fallback.map { "return \($0)" }
-            ?? "fatalError(\"\(mockName).\(name) needs `\(memberPrefix)ReturnValue` or `\(memberPrefix)Handler` to be set.\")"
+            ?? "fatalError(\"\(mockName).\(name) needs \(hint) to be set.\")"
         invocation = """
             guard let \(memberPrefix)Handler else {
                 \(missingHandler)
             }
-            return \(callPrefix)\(memberPrefix)Handler(\(callArgs))
+            return \(callPrefix)\(memberPrefix)Handler(\(callArgs))\(cast)
         """
     } else {
         invocation = "    \(callPrefix)\(memberPrefix)Handler?(\(callArgs))"
@@ -238,7 +267,7 @@ private func functionMembers(
 
     let decls = """
     \(storage)
-    \(methodPrefix)func \(name)(\(paramText))\(effects)\(returnClause) {
+    \(methodPrefix)func \(name)\(genericClause)(\(paramText))\(effects)\(returnClause)\(whereClause) {
     \(bodyLines)
     }
     """
@@ -309,6 +338,13 @@ private func defaultReturn(for type: TypeSyntax) -> String? {
         }
     }
     return nil
+}
+
+/// Whether a type's text mentions any of the given generic parameter names.
+private func referencesGeneric(_ typeText: String, _ names: Set<String>) -> Bool {
+    guard !names.isEmpty else { return false }
+    let tokens = typeText.split { !($0.isLetter || $0.isNumber || $0 == "_") }
+    return tokens.contains { names.contains(String($0)) }
 }
 
 /// Drops parameter attributes (`@escaping`, `@autoclosure`) while keeping

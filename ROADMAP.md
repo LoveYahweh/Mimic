@@ -41,15 +41,26 @@ pinned macro-expansion contract. Runtime stays **zero third-party** throughout �
 
 Still open: per-handler call-order assertions across members.
 
-## v0.5 — Surface coverage
+## v0.5 — Surface coverage (in progress)
 
-- Generic methods (`func decode<T: Decodable>(_:) -> T`)
-- `subscript` requirements
-- Inherited / composed protocol requirements (walk the inheritance clause)
-- `mutating` and `rethrows` requirements
-- Variadic parameters
+- **Generic methods** ✅ (`func decode<T>(_:) -> T`) — type-erased to `Any` in storage
+  and force-cast back; generic clause + `where` clause preserved on the method
+- **Variadic parameters** ✅ (`Int...`) — captured as an array in the handler/recording
+- `mutating` requirements ✅ (witnessed by a plain method on the class)
+- Still open: `subscript` requirements, `rethrows`
+- **Not feasible by a peer macro:** inherited / composed protocol requirements. The
+  macro only sees the annotated protocol's own syntax, never the parent's members, so
+  it can't generate their implementations. Documented as a limitation instead.
 
-## v0.6 — Polish & 1.0
+## v0.6 — Richer stubbing
+
+- **Sequential returns** — `…Returns(x, y, z)` to vary the result across calls
+- **Argument-matched stubs** — `when(arg:)` style stubbing keyed on input
+- **`…ThrowsError(_:)`** convenience for the throw-this-error case
+- **Verification DSL** — order-aware `verify(mock.foo, calledBefore: mock.bar)`
+- **Nice/strict modes** — opt into trapping vs. silent defaults per mock
+
+## v0.7 — Polish & 1.0
 
 - DocC catalog with articles and symbol docs
 - GitHub Actions CI (`swift test` on macOS, build on Linux toolchain)
