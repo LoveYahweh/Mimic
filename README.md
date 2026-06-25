@@ -165,6 +165,19 @@ just SwiftPM.
 - A non-escaping closure hidden behind a `typealias` can't be detected (a macro can't
   resolve the alias) — use the closure type inline or mark it `@escaping`.
 
+## Documentation
+
+A [DocC](https://www.swift.org/documentation/docc/) catalog lives in
+[`Sources/Mimic/Documentation.docc`](Sources/Mimic/Documentation.docc) — an overview, a
+getting-started guide, a stubbing & verification guide, and a reference for the generated
+API. In Xcode: **Product ▸ Build Documentation**. From the command line (the DocC plugin is
+opt-in, so it isn't in the default dependency graph):
+
+```sh
+MIMIC_DOCC=1 swift package --allow-writing-to-directory ./docs \
+  generate-documentation --target Mimic --output-path ./docs
+```
+
 ## Running the tests
 
 ```sh

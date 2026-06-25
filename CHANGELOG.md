@@ -3,6 +3,13 @@
 All notable changes to Mimic are documented here. This project follows
 [Semantic Versioning](https://semver.org).
 
+## Unreleased
+
+### Added
+- **DocC documentation catalog** (`Sources/Mimic/Documentation.docc`) — overview,
+  getting-started, stubbing & verification, and a generated-API reference. The
+  `swift-docc-plugin` is opt-in (`MIMIC_DOCC=1`) so consumers don't resolve it.
+
 ## 1.3.0
 
 ### Added

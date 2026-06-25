@@ -3,6 +3,7 @@
 
 import PackageDescription
 import CompilerPluginSupport
+import Foundation
 
 let package = Package(
     name: "Mimic",
@@ -57,3 +58,11 @@ let package = Package(
     ],
     swiftLanguageModes: [.v6]
 )
+
+// DocC support is opt-in so consumers don't resolve the plugin. Build docs with:
+//   MIMIC_DOCC=1 swift package generate-documentation --target Mimic
+if ProcessInfo.processInfo.environment["MIMIC_DOCC"] != nil {
+    package.dependencies.append(
+        .package(url: "https://github.com/swiftlang/swift-docc-plugin", from: "1.0.0")
+    )
+}
