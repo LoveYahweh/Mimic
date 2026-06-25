@@ -116,9 +116,11 @@ then `@testable import MyApp` to use it.
 ## Supported
 
 Sync / `async` / `throws` / typed `throws` methods · **generic methods** (type-erased) ·
-**variadic**, `inout`, closure, tuple, optional, and defaulted parameters · `mutating`
-requirements · `static` requirements · overloads (by label, arity, type, or async-ness) ·
-get-only / get-set / optional / collection properties · access-level mirroring.
+**variadic**, `inout`, `borrowing`/`consuming`, closure, tuple, optional, and defaulted
+parameters · keyword parameter names · `Self` results and parameters · `mutating` /
+`static` requirements · overloads (by label, arity, type, or async-ness) · get-only /
+get-set / optional / collection / function-type properties · **`@MainActor` (and custom
+global-actor) protocols, including `nonisolated` members** · access-level mirroring.
 
 Generic methods are type-erased: the handler trades in `Any` and the result is force-cast
 back to the requested type, so `let x: Int = mock.decode("1")` works while keeping the
@@ -128,9 +130,13 @@ mock storable.
 
 On the [roadmap](ROADMAP.md):
 
-- **`subscript`** and **`rethrows`** requirements aren't generated yet.
-- `init` and `associatedtype` requirements, and effectful property accessors
-  (`{ get async throws }`), aren't supported.
+- **`subscript`** and **`rethrows`** requirements aren't generated yet (subscript/`init`/
+  `associatedtype` requirements emit a clear warning rather than a confusing conformance
+  error).
+- A **non-escaping closure hidden behind a `typealias`** can't be detected — a macro can't
+  resolve the alias — so it's recorded and won't compile. Use the closure type inline, or
+  mark it `@escaping`.
+- Effectful property accessors (`{ get async throws }`) aren't supported.
 - **Inherited / composed protocols** can't be supported by a peer macro: it only sees the
   annotated protocol's own syntax, never the parent's members. Re-declare (or annotate the
   parent and compose) instead.

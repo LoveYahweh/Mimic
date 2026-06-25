@@ -49,7 +49,7 @@ public struct MockableMacro: PeerMacro {
                 ))
                 functionIndex += 1
             } else if let variable = item.decl.as(VariableDeclSyntax.self),
-                      let member = propertyMembers(variable, mockName: mockName, access: access) {
+                      let member = propertyMembers(variable, mockName: mockName, access: access, globalActor: globalActor) {
                 members.append(member)
             } else if let unsupported = unsupportedMemberDescription(item.decl) {
                 // Warn clearly rather than leave a confusing "does not conform" error.
@@ -202,15 +202,22 @@ private func functionMembers(
     }
     let recordableParams = params.filter(\.recordable)
 
-    // Member modifier prefixes. `static` requirements need static storage marked
-    // `nonisolated(unsafe)` (mutable static state is otherwise rejected under the
-    // Swift 6 language mode). The counters expose a public getter but stay
+    // A `nonisolated` requirement on an actor-isolated protocol needs a
+    // nonisolated witness, so its storage opts out of the actor and the method
+    // (and handler closure) carry no isolation.
+    let isNonisolated = function.modifiers.contains { $0.name.text == "nonisolated" }
+    let memberActor = isNonisolated ? "" : globalActor
+
+    // Member modifier prefixes. Mutable storage that is `static`, or nonisolated on
+    // an actor-isolated mock, must be marked `nonisolated(unsafe)` to compile under
+    // the Swift 6 language mode. The counters expose a public getter but stay
     // privately settable. Methods don't store state, so they skip the escape hatch.
     let staticKw = isStatic ? "static " : ""
-    let storedStatic = isStatic ? "nonisolated(unsafe) static " : ""
+    let needsUnsafe = isStatic || (isNonisolated && !globalActor.isEmpty)
+    let storedStatic = "\(needsUnsafe ? "nonisolated(unsafe) " : "")\(staticKw)"
     let member = "\(access)\(storedStatic)"
     let counter = "\(access)private(set) \(storedStatic)"
-    let methodPrefix = "\(access)\(staticKw)"
+    let methodPrefix = "\(access)\(isNonisolated ? "nonisolated " : "")\(staticKw)"
 
     // Closure / handler type, e.g. `((Int, String) async throws -> Bool)?`.
     // Parameter attributes like `@escaping` are stripped — they're illegal inside
@@ -218,7 +225,7 @@ private func functionMembers(
     // When the protocol is actor-isolated, the handler closure carries the same
     // isolation so on-actor arguments aren't "sent" to a nonisolated callee.
     let closureParams = params.map(\.bareType).joined(separator: ", ")
-    let handlerType = "(\(globalActor)(\(closureParams))\(effects) -> \(handlerReturn))?"
+    let handlerType = "(\(memberActor)(\(closureParams))\(effects) -> \(handlerReturn))?"
 
     // Call-recording storage.
     var storage = """
@@ -357,7 +364,8 @@ private func functionMembers(
 private func propertyMembers(
     _ variable: VariableDeclSyntax,
     mockName: String,
-    access: String
+    access: String,
+    globalActor: String
 ) -> GeneratedMember? {
     guard let binding = variable.bindings.first,
           let pattern = binding.pattern.as(IdentifierPatternSyntax.self),
@@ -371,8 +379,13 @@ private func propertyMembers(
     // concrete type is equivalent and still satisfies the requirement.
     let typeText = substitutingSelf(type.trimmedDescription, with: mockName)
     let isStatic = variable.modifiers.contains { $0.name.text == "static" }
-    let storedStatic = isStatic ? "nonisolated(unsafe) static " : ""
+    // A `nonisolated` requirement on an actor-isolated mock needs nonisolated
+    // storage and accessor (see the function path for the same handling).
+    let isNonisolated = variable.modifiers.contains { $0.name.text == "nonisolated" }
+    let needsUnsafe = isStatic || (isNonisolated && !globalActor.isEmpty)
     let staticKw = isStatic ? "static " : ""
+    let storedStatic = "\(needsUnsafe ? "nonisolated(unsafe) " : "")\(staticKw)"
+    let isolation = isNonisolated ? "nonisolated " : ""
 
     // An optional requirement is satisfied by a plain stored property (defaulting
     // to nil), which is also settable from the test.
@@ -388,7 +401,7 @@ private func propertyMembers(
     // `Optional<…>` (not `…?`) so a function-typed property binds the `?` correctly.
     let decls = """
     private \(storedStatic)var \(backing): Optional<\(typeText)> = nil
-    \(access)\(staticKw)var \(name): \(typeText) {
+    \(access)\(isolation)\(staticKw)var \(name): \(typeText) {
         get {
             guard let \(backing) else {
                 fatalError("\(mockName).\(rawName) was read before it was set.")
