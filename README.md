@@ -1,6 +1,7 @@
 # Mimic
 
 [![CI](https://github.com/LoveYahweh/Mimic/actions/workflows/ci.yml/badge.svg)](https://github.com/LoveYahweh/Mimic/actions/workflows/ci.yml)
+[![Docs](https://github.com/LoveYahweh/Mimic/actions/workflows/docs.yml/badge.svg)](https://loveyahweh.github.io/Mimic/documentation/mimic/)
 [![Swift 6](https://img.shields.io/badge/Swift-6-orange.svg)](https://swift.org)
 [![Platforms](https://img.shields.io/badge/platforms-iOS%20%7C%20macOS%20%7C%20tvOS%20%7C%20watchOS-blue.svg)](#requirements)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
@@ -167,8 +168,9 @@ just SwiftPM.
 
 ## Documentation
 
-A [DocC](https://www.swift.org/documentation/docc/) catalog lives in
-[`Sources/Mimic/Documentation.docc`](Sources/Mimic/Documentation.docc) — an overview, a
+📖 **[loveyahweh.github.io/Mimic](https://loveyahweh.github.io/Mimic/documentation/mimic/)** —
+published from the [DocC](https://www.swift.org/documentation/docc/) catalog in
+[`Sources/Mimic/Documentation.docc`](Sources/Mimic/Documentation.docc): an overview, a
 getting-started guide, a stubbing & verification guide, and a reference for the generated
 API. In Xcode: **Product ▸ Build Documentation**. From the command line (the DocC plugin is
 opt-in, so it isn't in the default dependency graph):
