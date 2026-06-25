@@ -83,10 +83,15 @@ private struct GeneratedMember {
 // MARK: - Function members
 
 private struct Param {
-    let label: String?   // external argument label; nil == `_`
-    let name: String     // internal parameter name
-    let type: String     // type as written, for the method signature
-    let bareType: String // type without parameter attributes, for stored closures
+    let label: String?     // external argument label; nil == `_`
+    let name: String       // internal parameter name
+    let type: String       // type as written, for the method signature
+    let bareType: String   // attributes stripped, keeps `inout`; for the closure type
+    let recordType: String // also drops `inout`; for the recorded `…Calls` element
+    let isInout: Bool
+
+    /// How the argument is forwarded to the handler (`inout` needs `&`).
+    var callArgument: String { isInout ? "&\(name)" : name }
 }
 
 private func functionMembers(
@@ -110,11 +115,15 @@ private func functionMembers(
     let params: [Param] = signature.parameterClause.parameters.map { p in
         let first = p.firstName.text
         let second = p.secondName?.text
+        let bare = strippedType(p.type)
+        let isInout = bare.hasPrefix("inout ")
         return Param(
             label: first == "_" ? nil : first,
             name: second ?? first,
             type: p.type.trimmedDescription,
-            bareType: strippedType(p.type)
+            bareType: bare,
+            recordType: isInout ? String(bare.dropFirst("inout ".count)) : bare,
+            isInout: isInout
         )
     }
 
@@ -146,11 +155,11 @@ private func functionMembers(
     case 0:
         recordLine = ""
     case 1:
-        storage += "\n\(counter)var \(memberPrefix)Calls: [\(params[0].bareType)] = []"
+        storage += "\n\(counter)var \(memberPrefix)Calls: [\(params[0].recordType)] = []"
         recordLine = "    \(memberPrefix)Calls.append(\(params[0].name))"
         resetLines.append("\(memberPrefix)Calls = []")
     default:
-        let tupleType = params.map { "\($0.name): \($0.bareType)" }.joined(separator: ", ")
+        let tupleType = params.map { "\($0.name): \($0.recordType)" }.joined(separator: ", ")
         let tupleValue = params.map { "\($0.name): \($0.name)" }.joined(separator: ", ")
         storage += "\n\(counter)var \(memberPrefix)Calls: [(\(tupleType))] = []"
         recordLine = "    \(memberPrefix)Calls.append((\(tupleValue)))"
@@ -161,8 +170,8 @@ private func functionMembers(
     storage += "\n\(access)\(staticKw)var \(memberPrefix)WasCalled: Bool { \(memberPrefix)CallCount > 0 }"
     if !params.isEmpty {
         let element = params.count == 1
-            ? params[0].bareType
-            : "(\(params.map { "\($0.name): \($0.bareType)" }.joined(separator: ", ")))"
+            ? params[0].recordType
+            : "(\(params.map { "\($0.name): \($0.recordType)" }.joined(separator: ", ")))"
         // `Optional<…>` rather than `…?` so a function-typed element (e.g. a
         // completion closure) doesn't bind the `?` onto its return type.
         storage += "\n\(access)\(staticKw)var \(memberPrefix)LastCall: Optional<\(element)> { \(memberPrefix)Calls.last }"
@@ -174,7 +183,7 @@ private func functionMembers(
         let ignored = params.isEmpty ? "" : params.map { _ in "_" }.joined(separator: ", ") + " in "
         storage += """
 
-        private \(storedStatic)var _\(memberPrefix)ReturnValue: \(returnType)?
+        private \(storedStatic)var _\(memberPrefix)ReturnValue: Optional<\(returnType)> = nil
         \(access)\(staticKw)var \(memberPrefix)ReturnValue: \(returnType) {
             get {
                 guard let _\(memberPrefix)ReturnValue else {
@@ -203,7 +212,7 @@ private func functionMembers(
     }.joined(separator: ", ")
     let returnClause = returnType.map { " -> \($0)" } ?? ""
 
-    let callArgs = params.map(\.name).joined(separator: ", ")
+    let callArgs = params.map(\.callArgument).joined(separator: ", ")
     let callPrefix = "\(isThrows ? "try " : "")\(isAsync ? "await " : "")"
 
     let invocation: String

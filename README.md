@@ -105,13 +105,22 @@ then `@testable import MyApp` to use it.
 - Swift 6.0+ toolchain
 - iOS 13+ / macOS 10.15+ / tvOS 13+ / watchOS 6+
 
+## Supported
+
+Sync / `async` / `throws` / typed `throws` methods · `inout`, variadic-free closure, tuple,
+optional, and defaulted parameters · `mutating` requirements · `static` requirements ·
+overloads (by label, arity, type, or async-ness) · get-only / get-set / optional / collection
+properties · access-level mirroring.
+
 ## Current limitations
 
 On the [roadmap](ROADMAP.md):
 
 - **Generic methods** (`func decode<T>(_:) -> T`) aren't generated yet.
-- **`subscript`** requirements and inherited/composed protocol requirements aren't walked.
-- Properties with effectful accessors (`{ get async throws }`) aren't supported.
+- **Variadic parameters** (`Int...`) and **`subscript`** requirements aren't generated.
+- Inherited / composed protocol requirements aren't walked.
+- `init` and `associatedtype` requirements, `rethrows`, and effectful property accessors
+  (`{ get async throws }`) aren't supported.
 
 ## Running the tests
 

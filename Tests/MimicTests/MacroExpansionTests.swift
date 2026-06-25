@@ -31,7 +31,7 @@ final class MacroExpansionTests: XCTestCase {
                 var greetLastCall: Optional<String> {
                     greetCalls.last
                 }
-                private var _greetReturnValue: String?
+                private var _greetReturnValue: Optional<String> = nil
                 var greetReturnValue: String {
                     get {
                         guard let _greetReturnValue else {
