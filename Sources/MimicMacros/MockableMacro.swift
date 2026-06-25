@@ -4,7 +4,8 @@ import SwiftSyntaxMacros
 
 /// `@Mockable` generates a `Mock<ProtocolName>` test double as a peer of the
 /// annotated protocol. The generated mock records every call (count + arguments)
-/// and lets a test stub behaviour by assigning a `<member>Handler` closure.
+/// and lets a test stub behaviour by assigning a `<member>Handler` closure or,
+/// for the simple case, a `<member>ReturnValue`.
 public struct MockableMacro: PeerMacro {
     public static func expansion(
         of node: AttributeSyntax,
@@ -26,7 +27,7 @@ public struct MockableMacro: PeerMacro {
         }
         let prefixes = disambiguatedPrefixes(for: functions)
 
-        var members: [String] = []
+        var members: [GeneratedMember] = []
         var functionIndex = 0
         for item in proto.memberBlock.members {
             if let function = item.decl.as(FunctionDeclSyntax.self) {
@@ -37,12 +38,25 @@ public struct MockableMacro: PeerMacro {
                     access: access
                 ))
                 functionIndex += 1
-            } else if let variable = item.decl.as(VariableDeclSyntax.self) {
-                members.append(contentsOf: propertyMembers(variable, mockName: mockName, access: access))
+            } else if let variable = item.decl.as(VariableDeclSyntax.self),
+                      let member = propertyMembers(variable, mockName: mockName, access: access) {
+                members.append(member)
             }
         }
 
-        let body = members
+        // `mimicReset()` returns the mock to a fresh state. It's deliberately
+        // namespaced so it can't clash with a protocol requirement named `reset`.
+        let resetLines = members.flatMap(\.resetLines)
+        if !resetLines.isEmpty {
+            let body = resetLines.map { "    \($0)" }.joined(separator: "\n")
+            members.append(GeneratedMember(decls: """
+            \(access)func mimicReset() {
+            \(body)
+            }
+            """))
+        }
+
+        let body = members.map(\.decls)
             .joined(separator: "\n\n")
             .split(separator: "\n", omittingEmptySubsequences: false)
             .map { $0.isEmpty ? "" : "    \($0)" }
@@ -59,12 +73,20 @@ public struct MockableMacro: PeerMacro {
     }
 }
 
+/// The source produced for one protocol requirement, plus the statements that
+/// return it to a pristine state inside `mimicReset()`.
+private struct GeneratedMember {
+    var decls: String
+    var resetLines: [String] = []
+}
+
 // MARK: - Function members
 
 private struct Param {
     let label: String?   // external argument label; nil == `_`
     let name: String     // internal parameter name
-    let type: String
+    let type: String     // type as written, for the method signature
+    let bareType: String // type without parameter attributes, for stored closures
 }
 
 private func functionMembers(
@@ -72,13 +94,17 @@ private func functionMembers(
     memberPrefix: String,
     mockName: String,
     access: String
-) -> String {
+) -> GeneratedMember {
     let name = function.name.text
     let signature = function.signature
-    let isAsync = signature.effectSpecifiers?.asyncSpecifier != nil
-    let isThrows = signature.effectSpecifiers?.throwsClause != nil
     let isStatic = function.modifiers.contains { $0.name.text == "static" }
     let returnType = signature.returnClause?.type.trimmedDescription
+
+    // Effects are copied verbatim so typed throws (`throws(MyError)`) survives.
+    let isAsync = signature.effectSpecifiers?.asyncSpecifier != nil
+    let throwsClause = signature.effectSpecifiers?.throwsClause
+    let isThrows = throwsClause != nil
+    let effects = "\(isAsync ? " async" : "")\(throwsClause.map { " \($0.trimmedDescription)" } ?? "")"
 
     let params: [Param] = signature.parameterClause.parameters.map { p in
         let first = p.firstName.text
@@ -86,7 +112,8 @@ private func functionMembers(
         return Param(
             label: first == "_" ? nil : first,
             name: second ?? first,
-            type: p.type.trimmedDescription
+            type: p.type.trimmedDescription,
+            bareType: strippedType(p.type)
         )
     }
 
@@ -100,9 +127,10 @@ private func functionMembers(
     let counter = "\(access)private(set) \(storedStatic)"
     let methodPrefix = "\(access)\(staticKw)"
 
-    // Closure / handler type, e.g. `((Int, String) async throws -> Bool)?`
-    let effects = "\(isAsync ? " async" : "")\(isThrows ? " throws" : "")"
-    let closureParams = params.map(\.type).joined(separator: ", ")
+    // Closure / handler type, e.g. `((Int, String) async throws -> Bool)?`.
+    // Parameter attributes like `@escaping` are stripped — they're illegal inside
+    // a stored function type, but completion-handler params still work.
+    let closureParams = params.map(\.bareType).joined(separator: ", ")
     let handlerType = "((\(closureParams))\(effects) -> \(returnType ?? "Void"))?"
 
     // Call-recording storage.
@@ -110,18 +138,45 @@ private func functionMembers(
     \(member)var \(memberPrefix)Handler: \(handlerType)
     \(counter)var \(memberPrefix)CallCount = 0
     """
+    var resetLines = ["\(memberPrefix)Handler = nil", "\(memberPrefix)CallCount = 0"]
+
     let recordLine: String
     switch params.count {
     case 0:
         recordLine = ""
     case 1:
-        storage += "\n\(counter)var \(memberPrefix)Calls: [\(params[0].type)] = []"
+        storage += "\n\(counter)var \(memberPrefix)Calls: [\(params[0].bareType)] = []"
         recordLine = "    \(memberPrefix)Calls.append(\(params[0].name))"
+        resetLines.append("\(memberPrefix)Calls = []")
     default:
-        let tupleType = params.map { "\($0.name): \($0.type)" }.joined(separator: ", ")
+        let tupleType = params.map { "\($0.name): \($0.bareType)" }.joined(separator: ", ")
         let tupleValue = params.map { "\($0.name): \($0.name)" }.joined(separator: ", ")
         storage += "\n\(counter)var \(memberPrefix)Calls: [(\(tupleType))] = []"
         recordLine = "    \(memberPrefix)Calls.append((\(tupleValue)))"
+        resetLines.append("\(memberPrefix)Calls = []")
+    }
+
+    // `…ReturnValue` shorthand: assigning it stubs a handler that ignores the
+    // arguments and returns the value, so trivial stubs need no closure.
+    if let returnType, returnType != "Void" {
+        let ignored = params.isEmpty ? "" : params.map { _ in "_" }.joined(separator: ", ") + " in "
+        storage += """
+
+        private \(storedStatic)var _\(memberPrefix)ReturnValue: \(returnType)?
+        \(access)\(staticKw)var \(memberPrefix)ReturnValue: \(returnType) {
+            get {
+                guard let _\(memberPrefix)ReturnValue else {
+                    fatalError("\(mockName).\(name) needs `\(memberPrefix)ReturnValue` or `\(memberPrefix)Handler` to be set.")
+                }
+                return _\(memberPrefix)ReturnValue
+            }
+            set {
+                _\(memberPrefix)ReturnValue = newValue
+                \(memberPrefix)Handler = { \(ignored)newValue }
+            }
+        }
+        """
+        resetLines.append("_\(memberPrefix)ReturnValue = nil")
     }
 
     // Reconstruct the declaration so the mock conforms to the protocol exactly.
@@ -143,7 +198,7 @@ private func functionMembers(
     if let returnType, returnType != "Void" {
         invocation = """
             guard let \(memberPrefix)Handler else {
-                fatalError("\(mockName).\(name) was called before its `\(memberPrefix)Handler` was set.")
+                fatalError("\(mockName).\(name) needs `\(memberPrefix)ReturnValue` or `\(memberPrefix)Handler` to be set.")
             }
             return \(callPrefix)\(memberPrefix)Handler(\(callArgs))
         """
@@ -155,12 +210,13 @@ private func functionMembers(
         .filter { !$0.isEmpty }
         .joined(separator: "\n")
 
-    return """
+    let decls = """
     \(storage)
     \(methodPrefix)func \(name)(\(paramText))\(effects)\(returnClause) {
     \(bodyLines)
     }
     """
+    return GeneratedMember(decls: decls, resetLines: isStatic ? [] : resetLines)
 }
 
 // MARK: - Property members
@@ -169,29 +225,31 @@ private func propertyMembers(
     _ variable: VariableDeclSyntax,
     mockName: String,
     access: String
-) -> [String] {
+) -> GeneratedMember? {
     guard let binding = variable.bindings.first,
           let pattern = binding.pattern.as(IdentifierPatternSyntax.self),
           let type = binding.typeAnnotation?.type
-    else { return [] }
+    else { return nil }
 
     let name = pattern.identifier.text
     let typeText = type.trimmedDescription
     let isStatic = variable.modifiers.contains { $0.name.text == "static" }
-    let staticKw = isStatic ? "static " : ""
     let storedStatic = isStatic ? "nonisolated(unsafe) static " : ""
-    let storedMember = "\(access)\(storedStatic)"
+    let staticKw = isStatic ? "static " : ""
 
     // An optional requirement is satisfied by a plain stored property (defaulting
     // to nil), which is also settable from the test.
     if type.is(OptionalTypeSyntax.self) {
-        return ["\(storedMember)var \(name): \(typeText)"]
+        return GeneratedMember(
+            decls: "\(access)\(storedStatic)var \(name): \(typeText)",
+            resetLines: isStatic ? [] : ["\(name) = nil"]
+        )
     }
 
     // A non-optional requirement needs a value the mock can't synthesise, so back
     // it with an optional and expose the exact type via a computed accessor.
     // Providing a setter also lets a test assign get-only requirements directly.
-    return ["""
+    let decls = """
     private \(storedStatic)var _\(name): \(typeText)?
     \(access)\(staticKw)var \(name): \(typeText) {
         get {
@@ -202,7 +260,21 @@ private func propertyMembers(
         }
         set { _\(name) = newValue }
     }
-    """]
+    """
+    return GeneratedMember(decls: decls, resetLines: isStatic ? [] : ["_\(name) = nil"])
+}
+
+// MARK: - Types
+
+/// Drops parameter attributes (`@escaping`, `@autoclosure`) while keeping
+/// specifiers (`inout`), so the type is valid inside a stored closure.
+private func strippedType(_ type: TypeSyntax) -> String {
+    guard let attributed = type.as(AttributedTypeSyntax.self) else {
+        return type.trimmedDescription
+    }
+    let specifiers = attributed.specifiers.trimmedDescription
+    let base = attributed.baseType.trimmedDescription
+    return specifiers.isEmpty ? base : "\(specifiers) \(base)"
 }
 
 // MARK: - Access level

@@ -22,22 +22,32 @@ pinned macro-expansion contract. Runtime stays **zero third-party** throughout �
 - **`static` requirements** — generate `static` handlers, counters, and methods
   (storage marked `nonisolated(unsafe)` for the Swift 6 language mode)
 
-## v0.3 — Stubbing ergonomics
+## v0.3 — Stubbing ergonomics ✅ (shipped)
 
 - `…ReturnValue` shorthand for the common "always return X" case (no closure needed)
+- A generated `mimicReset()` that clears all counters, recorded calls, handlers, and
+  property values (namespaced so it can't clash with a protocol requirement)
+- **Completion-handler functions** — `@escaping`/`@autoclosure` attributes are stripped
+  from the stored closure type, so callback-style APIs mock cleanly
+- **Async & throws** — `async`, `throws`, and **typed throws** (`throws(MyError)`) are
+  carried through verbatim into both the handler type and the conforming method
+
+## v0.4 — Stubbing ergonomics, continued
+
 - Sensible default returns for `Void`, `Optional`, and empty collections so trivial
   methods need no stub at all
 - `…LastCall` convenience and a `wasCalled` flag per member
-- A generated `reset()` that clears all counters, recorded calls, and handlers
+- Per-handler call-order assertions across members
 
-## v0.4 — Surface coverage
+## v0.5 — Surface coverage
 
 - Generic methods (`func decode<T: Decodable>(_:) -> T`)
 - `subscript` requirements
 - Inherited / composed protocol requirements (walk the inheritance clause)
-- `mutating` requirements
+- `mutating` and `rethrows` requirements
+- Variadic parameters
 
-## v0.5 — Polish & 1.0
+## v0.6 — Polish & 1.0
 
 - DocC catalog with articles and symbol docs
 - GitHub Actions CI (`swift test` on macOS, build on Linux toolchain)

@@ -30,6 +30,13 @@ let temp = try await mock.temperature(in: "Houston")   // 95
 #expect(mock.temperatureCalls == ["Houston"])
 ```
 
+For the common "just return this" case, skip the closure entirely:
+
+```swift
+mock.temperatureReturnValue = 72   // every call returns 72
+mock.mimicReset()                  // back to a fresh mock: handlers, counts, recorded calls
+```
+
 ## What gets generated
 
 For every protocol requirement the mock gains:
@@ -42,8 +49,14 @@ For every protocol requirement the mock gains:
 | `func reset()` (void) | handler is optional — no stub needed; the call is still counted |
 | `var token: String? { get set }` | a settable stored property |
 | `var isReady: Bool { get }` | a settable property (reading before it's set traps with a clear message) |
+| non-void method | also a `…ReturnValue` shorthand that stubs a constant-returning handler |
+| completion-handler method (`@escaping`) | the closure is captured in the handler so the test can invoke it |
+| `throws(MyError)` (typed throws) | effects are copied verbatim, so the typed throw is preserved |
 | overloaded methods | handler/recording names are disambiguated by argument label, e.g. `value(for:)` → `valueForHandler`, `value(at:)` → `valueAtHandler` |
 | `static` requirements | generated as `static` members on the mock type |
+
+Every mock also gets a `mimicReset()` that clears all handlers, call counts, recorded
+arguments, and property values — handy for shared or reused mocks.
 
 A non-void method called before its handler is set traps with a message that names the
 member, so a missing stub fails loudly instead of silently returning a default.

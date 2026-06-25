@@ -25,13 +25,35 @@ final class MacroExpansionTests: XCTestCase {
                 var greetHandler: ((String) -> String)?
                 private(set) var greetCallCount = 0
                 private(set) var greetCalls: [String] = []
+                private var _greetReturnValue: String?
+                var greetReturnValue: String {
+                    get {
+                        guard let _greetReturnValue else {
+                            fatalError("MockGreeter.greet needs `greetReturnValue` or `greetHandler` to be set.")
+                        }
+                        return _greetReturnValue
+                    }
+                    set {
+                        _greetReturnValue = newValue
+                        greetHandler = { _ in
+                            newValue
+                        }
+                    }
+                }
                 func greet(name: String) -> String {
                     greetCallCount += 1
                     greetCalls.append(name)
                     guard let greetHandler else {
-                        fatalError("MockGreeter.greet was called before its `greetHandler` was set.")
+                        fatalError("MockGreeter.greet needs `greetReturnValue` or `greetHandler` to be set.")
                     }
                     return greetHandler(name)
+                }
+
+                func mimicReset() {
+                    greetHandler = nil
+                    greetCallCount = 0
+                    greetCalls = []
+                    _greetReturnValue = nil
                 }
             }
             """,
@@ -67,6 +89,10 @@ final class MacroExpansionTests: XCTestCase {
                     set {
                         _isOn = newValue
                     }
+                }
+
+                public func mimicReset() {
+                    _isOn = nil
                 }
             }
             """,
