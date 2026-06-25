@@ -33,8 +33,10 @@ let temp = try await mock.temperature(in: "Houston")   // 95
 For the common "just return this" case, skip the closure entirely:
 
 ```swift
-mock.temperatureReturnValue = 72   // every call returns 72
-mock.mimicReset()                  // back to a fresh mock: handlers, counts, recorded calls
+mock.temperatureReturnValue = 72            // every call returns 72
+mock.temperatureReturns(60, 70, 80)         // each call in turn, then 80 repeats
+mock.temperatureThrowsError(NetworkError.offline)   // throwing requirements only
+mock.mimicReset()                           // back to a fresh mock: handlers, counts, recorded calls
 ```
 
 ## What gets generated

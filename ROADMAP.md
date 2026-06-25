@@ -52,15 +52,22 @@ Still open: per-handler call-order assertions across members.
   macro only sees the annotated protocol's own syntax, never the parent's members, so
   it can't generate their implementations. Documented as a limitation instead.
 
-## v0.6 — Richer stubbing
+## v0.6 — Richer stubbing ✅ (shipped)
 
-- **Sequential returns** — `…Returns(x, y, z)` to vary the result across calls
-- **Argument-matched stubs** — `when(arg:)` style stubbing keyed on input
-- **`…ThrowsError(_:)`** convenience for the throw-this-error case
-- **Verification DSL** — order-aware `verify(mock.foo, calledBefore: mock.bar)`
-- **Nice/strict modes** — opt into trapping vs. silent defaults per mock
+- **Sequential returns** ✅ — `…Returns(x, y, z)` varies the result across calls, then
+  repeats the last value
+- **`…ThrowsError(_:)`** ✅ convenience for throwing requirements (typed-throws aware)
 
-## v0.7 — Polish & 1.0
+Deferred past 1.0: argument-matched stubs (`when(arg:)`), an order-aware verification
+DSL, and per-mock nice/strict modes.
+
+## v0.7 — Polish & 1.0 (in progress)
+
+- DocC-friendly symbol docs on the public API
+- GitHub Actions CI (`swift test` on macOS)
+- An **Xcode demo app** (`XcodeDemo/`) that consumes the package and tests it through
+  `xcodebuild`
+- `CHANGELOG.md` and the **1.0.0** tag
 
 - DocC catalog with articles and symbol docs
 - GitHub Actions CI (`swift test` on macOS, build on Linux toolchain)

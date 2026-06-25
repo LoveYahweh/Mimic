@@ -202,11 +202,13 @@ private func functionMembers(
         storage += "\n\(access)\(staticKw)var \(memberPrefix)LastCall: Optional<\(element)> { \(memberPrefix)Calls.last }"
     }
 
+    // A closure head that ignores every argument, e.g. `_, _ in ` (or empty).
+    let closureHead = params.isEmpty ? "" : params.map { _ in "_" }.joined(separator: ", ") + " in "
+
     // `…ReturnValue` shorthand: assigning it stubs a handler that ignores the
     // arguments and returns the value, so trivial stubs need no closure. Skipped
     // for generic returns, which have no single concrete type to store.
     if let returnType, returnType != "Void", !returnIsGeneric {
-        let ignored = params.isEmpty ? "" : params.map { _ in "_" }.joined(separator: ", ") + " in "
         storage += """
 
         private \(storedStatic)var _\(memberPrefix)ReturnValue: Optional<\(returnType)> = nil
@@ -219,11 +221,33 @@ private func functionMembers(
             }
             set {
                 _\(memberPrefix)ReturnValue = newValue
-                \(memberPrefix)Handler = { \(ignored)newValue }
+                \(memberPrefix)Handler = { \(closureHead)newValue }
+            }
+        }
+
+        \(access)\(staticKw)func \(memberPrefix)Returns(_ values: \(returnType)...) {
+            var queue = values
+            \(memberPrefix)Handler = { \(closureHead)
+                queue.count > 1 ? queue.removeFirst() : queue[0]
             }
         }
         """
         resetLines.append("_\(memberPrefix)ReturnValue = nil")
+    }
+
+    // `…ThrowsError` convenience for any throwing requirement. The parameter type
+    // matches the (possibly typed) throw. The handler closure is written with an
+    // explicit signature so a typed throw (`throws(E)`) is inferred correctly
+    // rather than widening to `any Error`.
+    if isThrows {
+        let errorType = throwsClause?.type?.trimmedDescription ?? "any Error"
+        let typedParams = params.map { "_: \($0.bareType)" }.joined(separator: ", ")
+        storage += """
+
+        \(access)\(staticKw)func \(memberPrefix)ThrowsError(_ error: \(errorType)) {
+            \(memberPrefix)Handler = { (\(typedParams))\(effects) -> \(handlerReturn) in throw error }
+        }
+        """
     }
 
     // Reconstruct the declaration so the mock conforms to the protocol exactly.

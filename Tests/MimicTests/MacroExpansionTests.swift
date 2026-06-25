@@ -46,6 +46,13 @@ final class MacroExpansionTests: XCTestCase {
                         }
                     }
                 }
+
+                func greetReturns(_ values: String...) {
+                    var queue = values
+                    greetHandler = { _ in
+                        queue.count > 1 ? queue.removeFirst() : queue[0]
+                    }
+                }
                 func greet(name: String) -> String {
                     greetCallCount += 1
                     greetCalls.append(name)
