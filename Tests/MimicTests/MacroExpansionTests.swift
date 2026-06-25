@@ -91,7 +91,7 @@ final class MacroExpansionTests: XCTestCase {
                 public init() {
                 }
 
-                private var _isOn: Bool?
+                private var _isOn: Optional<Bool> = nil
                 public var isOn: Bool {
                     get {
                         guard let _isOn else {

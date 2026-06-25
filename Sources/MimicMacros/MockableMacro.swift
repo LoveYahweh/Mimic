@@ -83,15 +83,17 @@ private struct GeneratedMember {
 // MARK: - Function members
 
 private struct Param {
-    let label: String?     // external argument label; nil == `_`
-    let name: String       // internal parameter name
-    let type: String       // type as written, for the method signature
-    let bareType: String   // attributes stripped, keeps `inout`; for the closure type
-    let recordType: String // also drops `inout`; for the recorded `…Calls` element
+    let label: String?      // external argument label; nil == `_`
+    let name: String        // raw internal parameter name
+    let escapedName: String // `name`, backtick-escaped if it's a keyword
+    let type: String        // type as written, for the method signature
+    let bareType: String    // attributes stripped, keeps `inout`; for the closure type
+    let recordType: String  // also drops `inout`/ownership; for the `…Calls` element
     let isInout: Bool
+    let recordable: Bool    // false for non-escaping closures — storing one would escape it
 
     /// How the argument is forwarded to the handler (`inout` needs `&`).
-    var callArgument: String { isInout ? "&\(name)" : name }
+    var callArgument: String { isInout ? "&\(escapedName)" : escapedName }
 }
 
 private func functionMembers(
@@ -113,7 +115,12 @@ private func functionMembers(
     let genericClause = function.genericParameterClause?.trimmedDescription ?? ""
     let whereClause = function.genericWhereClause.map { " \($0.trimmedDescription)" } ?? ""
     let returnIsGeneric = returnType.map { referencesGeneric($0, genericNames) } ?? false
-    let handlerReturn = returnIsGeneric ? "Any" : (returnType ?? "Void")
+    // `Self` can't be a stored-property type; substitute the concrete mock name
+    // (the mock is `final`, so `Self == MockX`). Returns/ReturnValue are skipped.
+    let returnHasSelf = returnType.map { referencesGeneric($0, ["Self"]) } ?? false
+    let handlerReturn = returnIsGeneric
+        ? "Any"
+        : substitutingSelf(returnType ?? "Void", with: mockName)
 
     // Effects are copied verbatim so typed throws (`throws(MyError)`) survives.
     let isAsync = signature.effectSpecifiers?.asyncSpecifier != nil
@@ -122,35 +129,58 @@ private func functionMembers(
     let effects = "\(isAsync ? " async" : "")\(throwsClause.map { " \($0.trimmedDescription)" } ?? "")"
 
     let params: [Param] = signature.parameterClause.parameters.map { p in
-        let first = p.firstName.text
-        let second = p.secondName?.text
-        let elementType = p.type.trimmedDescription
+        let first = unescapedIdentifier(p.firstName.text)
+        let second = p.secondName.map { unescapedIdentifier($0.text) }
         let isVariadic = p.ellipsis != nil
-        let attrStripped = strippedType(p.type)           // drops @escaping, keeps inout
-        let isInout = attrStripped.hasPrefix("inout ")
-        let noInout = isInout ? String(attrStripped.dropFirst("inout ".count)) : attrStripped
-        let isGeneric = referencesGeneric(noInout, genericNames)
 
-        // The type as written in the conforming method (keeps `...`, `inout`, etc).
-        let signatureType = isVariadic ? "\(elementType)..." : p.type.trimmedDescription
-        // The stored-closure parameter type: a variadic becomes an array, a
-        // generic becomes `Any`, and `inout` is preserved.
+        // `inout` is legal inside a function type (and needs `&` at the call site);
+        // other ownership specifiers (`borrowing`/`consuming`) are illegal there and
+        // a plain witness still conforms, so they're dropped everywhere.
+        let (attributes, specifiers, base) = splitType(p.type)
+        let isInout = specifiers.contains("inout")
+        let isGeneric = referencesGeneric(base, genericNames)
+        let storedBase = isGeneric ? "Any" : substitutingSelf(base, with: mockName)
+
+        // The type as written in the conforming method keeps attributes and `inout`
+        // (so `@escaping` params still conform) but not `...`, which is appended.
+        // `Self` is substituted because a class can't take covariant `Self` as a
+        // parameter (the mock is `final`, so the concrete type is equivalent).
+        let sigBase = substitutingSelf(base, with: mockName)
+        let signatureCore = isInout ? "inout \(sigBase)" : sigBase
+        let attributed = attributes.isEmpty ? signatureCore : "\(attributes) \(signatureCore)"
+        let signatureType = isVariadic ? "\(sigBase)..." : attributed
+        // The stored-closure parameter type: a variadic becomes an array, `inout`
+        // is kept, attributes and other ownership specifiers are dropped.
         let closureType: String
-        if isGeneric { closureType = isInout ? "inout Any" : "Any" }
-        else if isVariadic { closureType = "[\(elementType)]" }
-        else { closureType = attrStripped }
+        if isVariadic { closureType = "[\(storedBase)]" }
+        else if isInout { closureType = "inout \(storedBase)" }
+        else { closureType = storedBase }
         // The recorded element type is the same but never `inout`.
-        let recordType = isGeneric ? "Any" : (isVariadic ? "[\(elementType)]" : noInout)
+        let recordType = isVariadic ? "[\(storedBase)]" : storedBase
 
+        // A non-escaping closure (incl. `@autoclosure`) can't be recorded — storing
+        // it in the `…Calls` array would let it escape — but it's still forwarded.
+        let coreType = (p.type.as(AttributedTypeSyntax.self)?.baseType) ?? p.type
+        let attributeTokens = attributes.split(separator: " ").map(String.init)
+        let isAutoclosure = attributeTokens.contains("@autoclosure")
+        let isEscaping = attributeTokens.contains("@escaping")
+        let isFunctionType = coreType.is(FunctionTypeSyntax.self)
+        let isOptional = p.type.is(OptionalTypeSyntax.self)
+        let recordable = !(isAutoclosure || (isFunctionType && !isEscaping && !isOptional))
+
+        let internalName = second ?? first
         return Param(
             label: first == "_" ? nil : first,
-            name: second ?? first,
+            name: internalName,
+            escapedName: escapedIdentifier(internalName),
             type: signatureType,
             bareType: closureType,
             recordType: recordType,
-            isInout: isInout
+            isInout: isInout,
+            recordable: recordable
         )
     }
+    let recordableParams = params.filter(\.recordable)
 
     // Member modifier prefixes. `static` requirements need static storage marked
     // `nonisolated(unsafe)` (mutable static state is otherwise rejected under the
@@ -176,16 +206,17 @@ private func functionMembers(
     var resetLines = ["\(memberPrefix)Handler = nil", "\(memberPrefix)CallCount = 0"]
 
     let recordLine: String
-    switch params.count {
+    switch recordableParams.count {
     case 0:
         recordLine = ""
     case 1:
-        storage += "\n\(counter)var \(memberPrefix)Calls: [\(params[0].recordType)] = []"
-        recordLine = "    \(memberPrefix)Calls.append(\(params[0].name))"
+        storage += "\n\(counter)var \(memberPrefix)Calls: [\(recordableParams[0].recordType)] = []"
+        recordLine = "    \(memberPrefix)Calls.append(\(recordableParams[0].escapedName))"
         resetLines.append("\(memberPrefix)Calls = []")
     default:
-        let tupleType = params.map { "\($0.name): \($0.recordType)" }.joined(separator: ", ")
-        let tupleValue = params.map { "\($0.name): \($0.name)" }.joined(separator: ", ")
+        // Tuple element labels accept keywords unescaped; only the value references do.
+        let tupleType = recordableParams.map { "\($0.name): \($0.recordType)" }.joined(separator: ", ")
+        let tupleValue = recordableParams.map { "\($0.name): \($0.escapedName)" }.joined(separator: ", ")
         storage += "\n\(counter)var \(memberPrefix)Calls: [(\(tupleType))] = []"
         recordLine = "    \(memberPrefix)Calls.append((\(tupleValue)))"
         resetLines.append("\(memberPrefix)Calls = []")
@@ -193,10 +224,10 @@ private func functionMembers(
 
     // Convenience accessors over the recorded state.
     storage += "\n\(access)\(staticKw)var \(memberPrefix)WasCalled: Bool { \(memberPrefix)CallCount > 0 }"
-    if !params.isEmpty {
-        let element = params.count == 1
-            ? params[0].recordType
-            : "(\(params.map { "\($0.name): \($0.recordType)" }.joined(separator: ", ")))"
+    if !recordableParams.isEmpty {
+        let element = recordableParams.count == 1
+            ? recordableParams[0].recordType
+            : "(\(recordableParams.map { "\($0.name): \($0.recordType)" }.joined(separator: ", ")))"
         // `Optional<…>` rather than `…?` so a function-typed element (e.g. a
         // completion closure) doesn't bind the `?` onto its return type.
         storage += "\n\(access)\(staticKw)var \(memberPrefix)LastCall: Optional<\(element)> { \(memberPrefix)Calls.last }"
@@ -207,8 +238,8 @@ private func functionMembers(
 
     // `…ReturnValue` shorthand: assigning it stubs a handler that ignores the
     // arguments and returns the value, so trivial stubs need no closure. Skipped
-    // for generic returns, which have no single concrete type to store.
-    if let returnType, returnType != "Void", !returnIsGeneric {
+    // for generic or `Self` returns, which have no single concrete type to store.
+    if let returnType, returnType != "Void", !returnIsGeneric, !returnHasSelf {
         storage += """
 
         private \(storedStatic)var _\(memberPrefix)ReturnValue: Optional<\(returnType)> = nil
@@ -254,9 +285,9 @@ private func functionMembers(
     let paramText = params.map { p -> String in
         let head: String
         switch p.label {
-        case nil: head = "_ \(p.name)"
-        case p.name?: head = p.name
-        case let label?: head = "\(label) \(p.name)"
+        case nil: head = "_ \(p.escapedName)"
+        case p.name?: head = p.name   // label and name are one token; the binding is referenced via escapedName
+        case let label?: head = "\(label) \(p.escapedName)"
         }
         return "\(head): \(p.type)"
     }.joined(separator: ", ")
@@ -267,12 +298,13 @@ private func functionMembers(
 
     let invocation: String
     if let returnType, returnType != "Void" {
-        // A generic return is erased to `Any` in the handler and force-cast back.
+        // A generic or `Self` return is stored loosely and force-cast back.
         // Otherwise an optional or collection return falls back to an empty value
         // when unstubbed; anything else traps so a missing stub is loud.
-        let cast = returnIsGeneric ? " as! \(returnType)" : ""
-        let fallback = returnIsGeneric ? nil : returnTypeSyntax.flatMap(defaultReturn(for:))
-        let hint = returnIsGeneric ? "`\(memberPrefix)Handler`" : "`\(memberPrefix)ReturnValue` or `\(memberPrefix)Handler`"
+        let erased = returnIsGeneric || returnHasSelf
+        let cast = erased ? " as! \(returnType)" : ""
+        let fallback = erased ? nil : returnTypeSyntax.flatMap(defaultReturn(for:))
+        let hint = erased ? "`\(memberPrefix)Handler`" : "`\(memberPrefix)ReturnValue` or `\(memberPrefix)Handler`"
         let missingHandler = fallback.map { "return \($0)" }
             ?? "fatalError(\"\(mockName).\(name) needs \(hint) to be set.\")"
         invocation = """
@@ -310,8 +342,12 @@ private func propertyMembers(
           let type = binding.typeAnnotation?.type
     else { return nil }
 
-    let name = pattern.identifier.text
-    let typeText = type.trimmedDescription
+    let rawName = unescapedIdentifier(pattern.identifier.text)
+    let name = escapedIdentifier(rawName)        // public property name
+    let backing = "_\(rawName)"                  // underscore prefix → never a keyword
+    // `Self` can't appear in a stored property; the mock is `final`, so the
+    // concrete type is equivalent and still satisfies the requirement.
+    let typeText = substitutingSelf(type.trimmedDescription, with: mockName)
     let isStatic = variable.modifiers.contains { $0.name.text == "static" }
     let storedStatic = isStatic ? "nonisolated(unsafe) static " : ""
     let staticKw = isStatic ? "static " : ""
@@ -327,20 +363,20 @@ private func propertyMembers(
 
     // A non-optional requirement needs a value the mock can't synthesise, so back
     // it with an optional and expose the exact type via a computed accessor.
-    // Providing a setter also lets a test assign get-only requirements directly.
+    // `Optional<…>` (not `…?`) so a function-typed property binds the `?` correctly.
     let decls = """
-    private \(storedStatic)var _\(name): \(typeText)?
+    private \(storedStatic)var \(backing): Optional<\(typeText)> = nil
     \(access)\(staticKw)var \(name): \(typeText) {
         get {
-            guard let _\(name) else {
-                fatalError("\(mockName).\(name) was read before it was set.")
+            guard let \(backing) else {
+                fatalError("\(mockName).\(rawName) was read before it was set.")
             }
-            return _\(name)
+            return \(backing)
         }
-        set { _\(name) = newValue }
+        set { \(backing) = newValue }
     }
     """
-    return GeneratedMember(decls: decls, resetLines: isStatic ? [] : ["_\(name) = nil"])
+    return GeneratedMember(decls: decls, resetLines: isStatic ? [] : ["\(backing) = nil"])
 }
 
 // MARK: - Types
@@ -371,15 +407,62 @@ private func referencesGeneric(_ typeText: String, _ names: Set<String>) -> Bool
     return tokens.contains { names.contains(String($0)) }
 }
 
-/// Drops parameter attributes (`@escaping`, `@autoclosure`) while keeping
-/// specifiers (`inout`), so the type is valid inside a stored closure.
-private func strippedType(_ type: TypeSyntax) -> String {
+/// Separates a parameter type into its attributes (`@escaping`), ownership
+/// specifiers (`inout`, `borrowing`, `consuming`, …), and the underlying type.
+private func splitType(_ type: TypeSyntax) -> (attributes: String, specifiers: [String], base: String) {
     guard let attributed = type.as(AttributedTypeSyntax.self) else {
-        return type.trimmedDescription
+        return ("", [], type.trimmedDescription)
     }
-    let specifiers = attributed.specifiers.trimmedDescription
-    let base = attributed.baseType.trimmedDescription
-    return specifiers.isEmpty ? base : "\(specifiers) \(base)"
+    let attributes = attributed.attributes.trimmedDescription
+    let specifiers = attributed.specifiers.map { $0.trimmedDescription }
+    return (attributes, specifiers, attributed.baseType.trimmedDescription)
+}
+
+/// Removes surrounding back-ticks from a source identifier so it can be
+/// re-escaped only where needed (`firstName.text` keeps them when escaped).
+private func unescapedIdentifier(_ text: String) -> String {
+    guard text.count >= 2, text.hasPrefix("`"), text.hasSuffix("`") else { return text }
+    return String(text.dropFirst().dropLast())
+}
+
+/// Reserved Swift keywords that must be back-tick escaped when used as an
+/// identifier (parameter name, tuple label, or value reference).
+private let reservedKeywords: Set<String> = [
+    "associatedtype", "class", "deinit", "enum", "extension", "fileprivate", "func",
+    "import", "init", "inout", "internal", "let", "open", "operator", "private",
+    "protocol", "public", "rethrows", "static", "struct", "subscript", "typealias",
+    "var", "break", "case", "continue", "default", "defer", "do", "else", "fallthrough",
+    "for", "guard", "if", "in", "repeat", "return", "switch", "where", "while", "as",
+    "catch", "false", "is", "nil", "super", "self", "Self", "throw", "throws", "true",
+    "try", "Any", "Protocol", "Type",
+]
+
+/// Back-tick escapes `name` when it collides with a reserved keyword.
+private func escapedIdentifier(_ name: String) -> String {
+    reservedKeywords.contains(name) ? "`\(name)`" : name
+}
+
+/// Replaces the whole word `Self` with the concrete mock type name. The mock is
+/// `final`, so `Self` resolves to it — but `Self` can't appear in stored property
+/// types, where the substitution is needed. Tokenizes by hand to stay available
+/// on the macro plugin's deployment target (no `Regex`, which needs macOS 13+).
+private func substitutingSelf(_ text: String, with mockName: String) -> String {
+    func isIdentifierCharacter(_ c: Character) -> Bool {
+        c.isLetter || c.isNumber || c == "_"
+    }
+    var result = ""
+    var token = ""
+    for character in text {
+        if isIdentifierCharacter(character) {
+            token.append(character)
+        } else {
+            result += (token == "Self" ? mockName : token)
+            token = ""
+            result.append(character)
+        }
+    }
+    result += (token == "Self" ? mockName : token)
+    return result
 }
 
 // MARK: - Access level
