@@ -25,12 +25,12 @@ protocol WeatherService {
 
 ```swift
 let mock = MockWeatherService()
-mock.temperatureHandler = { city in city == "Houston" ? 95 : 60 }
+mock.temperatureHandler = { city in city == "Paris" ? 95 : 60 }
 
-let temp = try await mock.temperature(in: "Houston")   // 95
+let temp = try await mock.temperature(in: "Paris")   // 95
 
 #expect(mock.temperatureCallCount == 1)
-#expect(mock.temperatureCalls == ["Houston"])
+#expect(mock.temperatureCalls == ["Paris"])
 ```
 
 ## Why Mimic

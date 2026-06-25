@@ -13,10 +13,10 @@ final class WeatherViewModelTests: XCTestCase {
         mock.temperatureReturnValue = 72                 // …ReturnValue shorthand
 
         let viewModel = WeatherViewModel(provider: mock)
-        await viewModel.load(city: "Austin")
+        await viewModel.load(city: "London")
 
-        XCTAssertEqual(viewModel.status, "Austin: 72°")
-        XCTAssertEqual(mock.temperatureCalls, ["Austin"])   // argument recording
+        XCTAssertEqual(viewModel.status, "London: 72°")
+        XCTAssertEqual(mock.temperatureCalls, ["London"])   // argument recording
         XCTAssertEqual(mock.temperatureCallCount, 1)
     }
 
@@ -26,9 +26,9 @@ final class WeatherViewModelTests: XCTestCase {
         mock.temperatureThrowsError(Offline())           // …ThrowsError convenience
 
         let viewModel = WeatherViewModel(provider: mock)
-        await viewModel.load(city: "Austin")
+        await viewModel.load(city: "London")
 
-        XCTAssertEqual(viewModel.status, "Couldn't load Austin")
+        XCTAssertEqual(viewModel.status, "Couldn't load London")
     }
 
     func testEmptyCityNeverCallsProvider() async {
