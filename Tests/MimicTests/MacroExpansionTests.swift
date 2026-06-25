@@ -256,27 +256,57 @@ final class MacroExpansionTests: XCTestCase {
         )
     }
 
-    func testWarnsOnInitRequirement() {
+    func testExpandsInitRequirements() {
         assertMacroExpansion(
             """
             @Mockable
             protocol Factory {
                 init(value: Int)
+                init?(name: String)
             }
             """,
             expandedSource: """
             protocol Factory {
                 init(value: Int)
+                init?(name: String)
             }
 
             final class MockFactory: Factory {
+                init() {
+                }
+
+                init(value: Int) {
+                }
+
+                init?(name: String) {
+                }
+            }
+            """,
+            macros: macros
+        )
+    }
+
+    func testWarnsOnAssociatedType() {
+        assertMacroExpansion(
+            """
+            @Mockable
+            protocol Container {
+                associatedtype Element
+            }
+            """,
+            expandedSource: """
+            protocol Container {
+                associatedtype Element
+            }
+
+            final class MockContainer: Container {
                 init() {
                 }
             }
             """,
             diagnostics: [
                 DiagnosticSpec(
-                    message: "@Mockable doesn't generate `init` requirements yet, so MockFactory won't conform until you add one by hand.",
+                    message: "@Mockable doesn't generate `associatedtype` requirements yet, so MockContainer won't conform until you add one by hand.",
                     line: 3,
                     column: 5,
                     severity: .warning

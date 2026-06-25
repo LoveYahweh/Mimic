@@ -3,6 +3,15 @@
 All notable changes to Mimic are documented here. This project follows
 [Semantic Versioning](https://semver.org).
 
+## 1.3.0
+
+### Added
+- **`init` requirements.** Protocols with initializer requirements (including failable
+  `init?` and throwing `init`) are now mockable — the generated `final` mock provides
+  empty witnesses, alongside a convenience `init()` unless the protocol requires its own.
+- **`rethrows` requirements.** Generated as non-throwing witnesses (a non-throwing witness
+  satisfies a `rethrows` requirement, and `rethrows` is illegal in a stored closure type).
+
 ## 1.2.0
 
 ### Added

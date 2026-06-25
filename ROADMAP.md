@@ -81,10 +81,13 @@ DSL, and per-mock nice/strict modes.
 - **Order-aware verification** — `mimicInvocations: [Invocation]` (type-safe ordered log)
   plus `mimicVerify(_:before:)`.
 
-## Post-1.2 ideas
+## 1.3 ✅ (shipped)
 
-- `init` and `rethrows` requirements
-- Per-mock nice/strict modes
+- **`init` requirements** (incl. failable and throwing) and **`rethrows`** requirements.
+
+## Post-1.3 ideas
+
+- Per-mock nice/strict modes (trap vs. silent default)
 
 - DocC catalog with articles and symbol docs
 - GitHub Actions CI (`swift test` on macOS, build on Linux toolchain)

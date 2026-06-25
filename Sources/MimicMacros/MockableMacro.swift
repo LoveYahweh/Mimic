@@ -76,6 +76,8 @@ public struct MockableMacro: PeerMacro {
                     globalActor: globalActor
                 ))
                 subscriptIndex += 1
+            } else if let initDecl = item.decl.as(InitializerDeclSyntax.self) {
+                members.append(initMember(initDecl, access: access))
             } else if let unsupported = unsupportedMemberDescription(item.decl) {
                 // Warn clearly rather than leave a confusing "does not conform" error.
                 context.diagnose(Diagnostic(
@@ -131,9 +133,14 @@ public struct MockableMacro: PeerMacro {
         // Omit the body block entirely for a member-less protocol so the mock
         // doesn't carry trailing blank lines.
         let bodyBlock = body.isEmpty ? "" : "\n\n\(body)"
+        // A convenience no-arg initializer, unless the protocol requires its own
+        // zero-parameter init (whose generated witness would otherwise collide).
+        let hasZeroParamInit = proto.memberBlock.members.contains {
+            ($0.decl.as(InitializerDeclSyntax.self))?.signature.parameterClause.parameters.isEmpty == true
+        }
+        let convenienceInit = hasZeroParamInit ? "" : "\n    \(access)init() {}"
         let mock: DeclSyntax = """
-        \(raw: globalActor)\(raw: access)final class \(raw: mockName): \(raw: protocolName) {
-            \(raw: access)init() {}\(raw: bodyBlock)
+        \(raw: globalActor)\(raw: access)final class \(raw: mockName): \(raw: protocolName) {\(raw: convenienceInit)\(raw: bodyBlock)
         }
         """
         return [mock]
@@ -256,8 +263,11 @@ private func functionMembers(
         : substitutingSelf(storedReturn ?? "Void", with: mockName)
 
     // Effects are copied verbatim so typed throws (`throws(MyError)`) survives.
+    // `rethrows` is treated as non-throwing: a non-throwing witness satisfies a
+    // `rethrows` requirement, and `rethrows` is illegal in a stored closure type.
     let isAsync = signature.effectSpecifiers?.asyncSpecifier != nil
-    let throwsClause = signature.effectSpecifiers?.throwsClause
+    let rawThrowsClause = signature.effectSpecifiers?.throwsClause
+    let throwsClause = (rawThrowsClause?.throwsSpecifier.text == "rethrows") ? nil : rawThrowsClause
     let isThrows = throwsClause != nil
     let effects = "\(isAsync ? " async" : "")\(throwsClause.map { " \($0.trimmedDescription)" } ?? "")"
 
@@ -810,9 +820,25 @@ private extension String {
 /// Describes a protocol requirement `@Mockable` doesn't generate, or `nil` if the
 /// member needs no warning (e.g. a nested type the mock can simply ignore).
 private func unsupportedMemberDescription(_ decl: DeclSyntax) -> String? {
-    if decl.is(InitializerDeclSyntax.self) { return "`init` requirements" }
     if decl.is(AssociatedTypeDeclSyntax.self) { return "`associatedtype` requirements" }
     return nil
+}
+
+// MARK: - Initializer members
+
+/// Generates an empty initializer that satisfies an `init` requirement. The mock
+/// is `final`, so no `required` is needed; failable and throwing inits are kept.
+private func initMember(_ decl: InitializerDeclSyntax, access: String) -> GeneratedMember {
+    let optionalMark = decl.optionalMark?.text ?? ""
+    let genericClause = decl.genericParameterClause?.trimmedDescription ?? ""
+    let whereClause = decl.genericWhereClause.map { " \($0.trimmedDescription)" } ?? ""
+    let paramClause = decl.signature.parameterClause.trimmedDescription
+    let async = decl.signature.effectSpecifiers?.asyncSpecifier != nil ? " async" : ""
+    let throwsText = decl.signature.effectSpecifiers?.throwsClause.map { " \($0.trimmedDescription)" } ?? ""
+    return GeneratedMember(decls: """
+    \(access)init\(optionalMark)\(genericClause)\(paramClause)\(async)\(throwsText)\(whereClause) {
+    }
+    """)
 }
 
 /// Whether a function name is an operator (so it can't form an identifier prefix).
