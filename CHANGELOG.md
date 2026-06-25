@@ -3,6 +3,15 @@
 All notable changes to Mimic are documented here. This project follows
 [Semantic Versioning](https://semver.org).
 
+## 1.2.0
+
+### Added
+- **Order-aware verification.** Every mock now keeps a type-safe, ordered log of method
+  calls — `mimicInvocations: [Invocation]` (a generated nested enum) — plus
+  `mimicVerify(_ earlier:before:)` to assert call ordering across members. Cleared by
+  `mimicReset()`. Static and `nonisolated` methods are excluded (they can't reach the
+  instance log).
+
 ## 1.1.0
 
 ### Added

@@ -76,9 +76,13 @@ DSL, and per-mock nice/strict modes.
 - **Argument-matched stubs** — `…When(_ match:, return:)` / `…When(_ match:, perform:)`,
   predicate-keyed, tried before the handler.
 
-## Post-1.1 ideas
+## 1.2 ✅ (shipped)
 
-- Order-aware verification DSL (call ordering across members)
+- **Order-aware verification** — `mimicInvocations: [Invocation]` (type-safe ordered log)
+  plus `mimicVerify(_:before:)`.
+
+## Post-1.2 ideas
+
 - `init` and `rethrows` requirements
 - Per-mock nice/strict modes
 

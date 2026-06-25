@@ -64,6 +64,7 @@ final class MacroExpansionTests: XCTestCase {
                 }
                 func greet(name: String) -> String {
                     greetCallCount += 1
+                    mimicInvocations.append(.greet)
                     greetCalls.append(name)
                     for stub in greetStubs where stub.match(name) {
                         return stub.body(name)
@@ -74,12 +75,25 @@ final class MacroExpansionTests: XCTestCase {
                     return greetHandler(name)
                 }
 
+                enum Invocation: Equatable {
+                    case greet
+                }
+                private(set) var mimicInvocations: [Invocation] = []
+                func mimicVerify(_ earlier: Invocation, before later: Invocation) -> Bool {
+                    guard let first = mimicInvocations.firstIndex(of: earlier),
+                          let last = mimicInvocations.lastIndex(of: later) else {
+                        return false
+                    }
+                    return first < last
+                }
+
                 func mimicReset() {
                     greetHandler = nil
                     greetCallCount = 0
                     greetCalls = []
                     _greetReturnValue = nil
                     greetStubs = []
+                    mimicInvocations = []
                 }
             }
             """,
@@ -154,6 +168,7 @@ final class MacroExpansionTests: XCTestCase {
                 }
                 func unwrap<T>(_ raw: String) -> T {
                     unwrapCallCount += 1
+                    mimicInvocations.append(.unwrap)
                     unwrapCalls.append(raw)
                     guard let unwrapHandler else {
                         fatalError("MockBox.unwrap needs `unwrapHandler` to be set.")
@@ -161,10 +176,23 @@ final class MacroExpansionTests: XCTestCase {
                     return unwrapHandler(raw) as! T
                 }
 
+                enum Invocation: Equatable {
+                    case unwrap
+                }
+                private(set) var mimicInvocations: [Invocation] = []
+                func mimicVerify(_ earlier: Invocation, before later: Invocation) -> Bool {
+                    guard let first = mimicInvocations.firstIndex(of: earlier),
+                          let last = mimicInvocations.lastIndex(of: later) else {
+                        return false
+                    }
+                    return first < last
+                }
+
                 func mimicReset() {
                     unwrapHandler = nil
                     unwrapCallCount = 0
                     unwrapCalls = []
+                    mimicInvocations = []
                 }
             }
             """,

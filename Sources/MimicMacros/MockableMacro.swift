@@ -87,6 +87,29 @@ public struct MockableMacro: PeerMacro {
             }
         }
 
+        // Order-aware verification: a type-safe log of method calls (in order) plus
+        // `mimicVerify(_:before:)`. Static and nonisolated methods are excluded.
+        let loggableCases = zip(functions, prefixes).compactMap { function, prefix -> String? in
+            let excluded = function.modifiers.contains { $0.name.text == "static" || $0.name.text == "nonisolated" }
+            return excluded ? nil : escapedIdentifier(prefix)
+        }
+        if !loggableCases.isEmpty {
+            let cases = loggableCases.map { "    case \($0)" }.joined(separator: "\n")
+            members.append(GeneratedMember(decls: """
+            \(access)enum Invocation: Equatable {
+            \(cases)
+            }
+            \(access)private(set) var mimicInvocations: [Invocation] = []
+            \(access)func mimicVerify(_ earlier: Invocation, before later: Invocation) -> Bool {
+                guard let first = mimicInvocations.firstIndex(of: earlier),
+                      let last = mimicInvocations.lastIndex(of: later) else {
+                    return false
+                }
+                return first < last
+            }
+            """, resetLines: ["mimicInvocations = []"]))
+        }
+
         // `mimicReset()` returns the mock to a fresh state. It's deliberately
         // namespaced so it can't clash with a protocol requirement named `reset`.
         let resetLines = members.flatMap(\.resetLines)
@@ -417,7 +440,11 @@ private func functionMembers(
         invocation = "    \(callPrefix)\(memberPrefix)Handler?(\(callArgs))"
     }
 
-    let bodyLines = ["    \(memberPrefix)CallCount += 1", recordLine, invocation]
+    // Record this call in the ordered invocation log for `mimicVerify`. Static and
+    // nonisolated methods are excluded — they can't reach the instance log.
+    let logsInvocation = !isStatic && !isNonisolated
+    let logLine = logsInvocation ? "    mimicInvocations.append(.\(escapedIdentifier(memberPrefix)))" : ""
+    let bodyLines = ["    \(memberPrefix)CallCount += 1", logLine, recordLine, invocation]
         .filter { !$0.isEmpty }
         .joined(separator: "\n")
 

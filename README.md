@@ -73,6 +73,15 @@ mock.temperatureWasCalled   // Bool
 mock.temperatureLastCall    // String?   (most recent arguments)
 ```
 
+**Order-aware verification.** Every mock keeps a type-safe log of which methods were called,
+in order, plus a `mimicVerify(_:before:)` helper:
+
+```swift
+mock.mimicInvocations                       // [.validate, .reserve, .charge]
+#expect(mock.mimicInvocations == [.validate, .reserve, .charge])
+#expect(mock.mimicVerify(.validate, before: .charge))
+```
+
 ## What gets generated
 
 | Requirement | Generated API |
