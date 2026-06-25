@@ -155,16 +155,19 @@ private func parsedParameters(
         // `inout` is legal inside a function type (and needs `&` at the call site);
         // other ownership specifiers (`borrowing`/`consuming`) are illegal there and
         // a plain witness still conforms, so they're dropped everywhere.
-        let (attributes, specifiers, base) = splitType(p.type)
+        let (attributes, specifiers, rawBase) = splitType(p.type)
         let isInout = specifiers.contains("inout")
-        let isGeneric = referencesGeneric(base, genericNames)
-        let storedBase = isGeneric ? "Any" : substitutingSelf(base, with: mockName)
+        let isGeneric = referencesGeneric(rawBase, genericNames)
+        // Storage normalizes an IUO to a plain optional (`!` is illegal in a stored
+        // closure/array), but the signature keeps the original `!` — an IUO
+        // requirement is only satisfied by an IUO witness.
+        let storedBase = isGeneric ? "Any" : substitutingSelf(normalizeIUO(rawBase), with: mockName)
 
         // The type as written in the conforming declaration keeps attributes and
         // `inout` (so `@escaping` params still conform) but not `...`, appended below.
         // `Self` is substituted because a class can't take covariant `Self` as a
         // parameter (the mock is `final`, so the concrete type is equivalent).
-        let sigBase = substitutingSelf(base, with: mockName)
+        let sigBase = substitutingSelf(rawBase, with: mockName)
         let signatureCore = isInout ? "inout \(sigBase)" : sigBase
         let attributed = attributes.isEmpty ? signatureCore : "\(attributes) \(signatureCore)"
         let signatureType = isVariadic ? "\(sigBase)..." : attributed
@@ -212,7 +215,8 @@ private func functionMembers(
     let signature = function.signature
     let isStatic = function.modifiers.contains { $0.name.text == "static" }
     let returnTypeSyntax = signature.returnClause?.type
-    let returnType = returnTypeSyntax?.trimmedDescription
+    let returnType = returnTypeSyntax?.trimmedDescription          // signature (keeps IUO)
+    let storedReturn = returnType.map(normalizeIUO)                // storage (IUO → optional)
 
     // Generic methods can't be stored as concrete closures, so any type that
     // mentions a generic parameter is erased to `Any` in storage and force-cast
@@ -226,7 +230,7 @@ private func functionMembers(
     let returnHasSelf = returnType.map { referencesGeneric($0, ["Self"]) } ?? false
     let handlerReturn = returnIsGeneric
         ? "Any"
-        : substitutingSelf(returnType ?? "Void", with: mockName)
+        : substitutingSelf(storedReturn ?? "Void", with: mockName)
 
     // Effects are copied verbatim so typed throws (`throws(MyError)`) survives.
     let isAsync = signature.effectSpecifiers?.asyncSpecifier != nil
@@ -303,11 +307,11 @@ private func functionMembers(
     // `…ReturnValue` shorthand: assigning it stubs a handler that ignores the
     // arguments and returns the value, so trivial stubs need no closure. Skipped
     // for generic or `Self` returns, which have no single concrete type to store.
-    if let returnType, returnType != "Void", !returnIsGeneric, !returnHasSelf {
+    if let returnType, let storedReturn, returnType != "Void", !returnIsGeneric, !returnHasSelf {
         storage += """
 
-        private \(storedStatic)var _\(memberPrefix)ReturnValue: Optional<\(returnType)> = nil
-        \(access)\(staticKw)var \(memberPrefix)ReturnValue: \(returnType) {
+        private \(storedStatic)var _\(memberPrefix)ReturnValue: Optional<\(storedReturn)> = nil
+        \(access)\(staticKw)var \(memberPrefix)ReturnValue: \(storedReturn) {
             get {
                 guard let _\(memberPrefix)ReturnValue else {
                     fatalError("\(mockName).\(name) needs `\(memberPrefix)ReturnValue` or `\(memberPrefix)Handler` to be set.")
@@ -320,7 +324,7 @@ private func functionMembers(
             }
         }
 
-        \(access)\(staticKw)func \(memberPrefix)Returns(_ values: \(returnType)...) {
+        \(access)\(staticKw)func \(memberPrefix)Returns(_ values: \(storedReturn)...) {
             var queue = values
             \(memberPrefix)Handler = { \(closureHead)
                 queue.count > 1 ? queue.removeFirst() : queue[0]
@@ -408,10 +412,11 @@ private func subscriptMembers(
     let whereClause = decl.genericWhereClause.map { " \($0.trimmedDescription)" } ?? ""
 
     let returnTypeSyntax = decl.returnClause.type
-    let returnType = returnTypeSyntax.trimmedDescription
+    let returnType = returnTypeSyntax.trimmedDescription                 // subscript decl (keeps IUO)
+    let storedReturn = normalizeIUO(returnType)                          // storage (IUO → optional)
     let returnIsGeneric = referencesGeneric(returnType, genericNames)
     let returnHasSelf = referencesGeneric(returnType, ["Self"])
-    let handlerReturn = returnIsGeneric ? "Any" : substitutingSelf(returnType, with: mockName)
+    let handlerReturn = returnIsGeneric ? "Any" : substitutingSelf(storedReturn, with: mockName)
     let cast = (returnIsGeneric || returnHasSelf) ? " as! \(returnType)" : ""
 
     let params = parsedParameters(decl.parameterClause.parameters, genericNames: genericNames, mockName: mockName)
@@ -527,8 +532,10 @@ private func propertyMembers(
     let name = escapedIdentifier(rawName)        // public property name
     let backing = "_\(rawName)"                  // underscore prefix → never a keyword
     // `Self` can't appear in a stored property; the mock is `final`, so the
-    // concrete type is equivalent and still satisfies the requirement.
+    // concrete type is equivalent and still satisfies the requirement. An IUO type
+    // (`Int!`) is kept as-is — a stored IUO property conforms and defaults to nil.
     let typeText = substitutingSelf(type.trimmedDescription, with: mockName)
+    let isIUO = type.is(ImplicitlyUnwrappedOptionalTypeSyntax.self)
     let isStatic = variable.modifiers.contains { $0.name.text == "static" }
     // A `nonisolated` requirement on an actor-isolated mock needs nonisolated
     // storage and accessor (see the function path for the same handling).
@@ -538,9 +545,9 @@ private func propertyMembers(
     let storedStatic = "\(needsUnsafe ? "nonisolated(unsafe) " : "")\(staticKw)"
     let isolation = isNonisolated ? "nonisolated " : ""
 
-    // An optional requirement is satisfied by a plain stored property (defaulting
-    // to nil), which is also settable from the test.
-    if type.is(OptionalTypeSyntax.self) {
+    // An optional (or IUO) requirement is satisfied by a plain stored property
+    // defaulting to nil, which is also settable from the test.
+    if type.is(OptionalTypeSyntax.self) || isIUO {
         return GeneratedMember(
             decls: "\(access)\(storedStatic)var \(name): \(typeText)",
             resetLines: isStatic ? [] : ["\(name) = nil"]
@@ -602,6 +609,13 @@ private func splitType(_ type: TypeSyntax) -> (attributes: String, specifiers: [
     let attributes = attributed.attributes.trimmedDescription
     let specifiers = attributed.specifiers.map { $0.trimmedDescription }
     return (attributes, specifiers, attributed.baseType.trimmedDescription)
+}
+
+/// Normalizes an implicitly-unwrapped optional (`Int!`) to a plain optional
+/// (`Int?`). `!` is illegal inside a stored closure/array type, and a `?` witness
+/// satisfies an IUO requirement, so the mock uses the optional form throughout.
+private func normalizeIUO(_ type: String) -> String {
+    type.hasSuffix("!") ? "\(type.dropLast())?" : type
 }
 
 /// Removes surrounding back-ticks from a source identifier so it can be

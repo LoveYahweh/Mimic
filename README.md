@@ -128,6 +128,11 @@ Generic methods are type-erased: the handler trades in `Any` and the result is f
 back to the requested type, so `let x: Int = mock.decode("1")` works while keeping the
 mock storable.
 
+**Any type form** can appear in a requirement: optionals, IUO (`Int!`), nested optionals,
+arrays / dictionaries / sets, tuples (labelled or not), function types, existentials
+(`any P`), protocol compositions (`A & B`), metatypes (`T.Type`), key paths, and arbitrarily
+nested generics.
+
 ## Current limitations
 
 On the [roadmap](ROADMAP.md):
