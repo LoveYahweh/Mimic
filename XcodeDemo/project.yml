@@ -1,0 +1,53 @@
+name: MimicDemoApp
+options:
+  bundleIdPrefix: com.mimic
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+
+packages:
+  Mimic:
+    # The Mimic package lives one directory up.
+    path: "../"
+
+targets:
+  MimicDemoApp:
+    type: application
+    platform: iOS
+    sources:
+      - path: App
+    dependencies:
+      - package: Mimic
+        product: Mimic
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.mimic.demoapp
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SWIFT_VERSION: "5.0"
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+
+  MimicDemoAppTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests
+    dependencies:
+      - target: MimicDemoApp
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.mimic.demoapp.tests
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "5.0"
+
+schemes:
+  MimicDemoApp:
+    build:
+      targets:
+        MimicDemoApp: all
+        MimicDemoAppTests: [test]
+    test:
+      targets:
+        - MimicDemoAppTests

@@ -1,5 +1,7 @@
 # Mimic
 
+[![CI](https://github.com/LoveYahweh/Mimic/actions/workflows/ci.yml/badge.svg)](https://github.com/LoveYahweh/Mimic/actions/workflows/ci.yml)
+
 Macro-driven mocks for Swift unit tests — **zero third-party runtime dependencies**.
 
 Annotate a protocol with `@Mockable` and Mimic generates a `Mock<Name>` test double that
@@ -70,6 +72,10 @@ collection property, and a void analytics call. [`Tests/MimicDemoTests`](Tests/M
 drives it entirely through the generated mocks — stubbing with `…ReturnValue` and
 `…Handler`, asserting on `…CallCount`/`…LastCall`/`…WasCalled`, and resetting with
 `mimicReset()`. It doubles as living documentation for how the mocks read in real tests.
+
+[`XcodeDemo/`](XcodeDemo) is a runnable **SwiftUI iOS app** that consumes the package and
+tests a view model through a Mimic mock — proof it works inside a real Xcode project, not
+just SwiftPM. Run its tests with `xcodebuild test … -skipMacroValidation`.
 
 A non-void method called before its handler is set traps with a message that names the
 member, so a missing stub fails loudly instead of silently returning a default.

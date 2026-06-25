@@ -61,13 +61,19 @@ Still open: per-handler call-order assertions across members.
 Deferred past 1.0: argument-matched stubs (`when(arg:)`), an order-aware verification
 DSL, and per-mock nice/strict modes.
 
-## v0.7 — Polish & 1.0 (in progress)
+## v0.7 — Polish & 1.0 ✅ (shipped)
 
 - DocC-friendly symbol docs on the public API
 - GitHub Actions CI (`swift test` on macOS)
-- An **Xcode demo app** (`XcodeDemo/`) that consumes the package and tests it through
-  `xcodebuild`
+- An **Xcode demo app** (`XcodeDemo/`) that consumes the package and is verified through
+  `xcodebuild test` on the iOS simulator
 - `CHANGELOG.md` and the **1.0.0** tag
+
+## Post-1.0 ideas
+
+- Argument-matched stubs (`when(arg:)`) and an order-aware verification DSL
+- `subscript` and `rethrows` requirements
+- Per-mock nice/strict modes
 
 - DocC catalog with articles and symbol docs
 - GitHub Actions CI (`swift test` on macOS, build on Linux toolchain)

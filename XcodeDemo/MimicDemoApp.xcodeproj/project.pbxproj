@@ -1,0 +1,440 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		06CDB43D30E02A57CEB1A6D8 /* WeatherViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AE02F4E4FDB62CCD056D11C /* WeatherViewModel.swift */; };
+		B9A5273F9B79013BD34C5ED8 /* Mimic in Frameworks */ = {isa = PBXBuildFile; productRef = 11B0400A18BD8379B787D837 /* Mimic */; };
+		BED1083E7554546EADE32AFB /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D03178F046905F2CD5DD4A81 /* ContentView.swift */; };
+		F32B9E0B017EC7278B58001E /* MimicDemoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5466B97C1923EC2177EDDB7D /* MimicDemoApp.swift */; };
+		FC98C892287C62461E9D04C4 /* WeatherViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FE4647FFC8DE34BEEA85C74 /* WeatherViewModelTests.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		C243DCE97566160AD3EE6F96 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = DE694CA6618A36052071278A /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 14A7C4A0EC50DF00C829C763;
+			remoteInfo = MimicDemoApp;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		2245E79E1F31761E088DBF1A /* MimicDemoApp.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = MimicDemoApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		2FE4647FFC8DE34BEEA85C74 /* WeatherViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherViewModelTests.swift; sourceTree = "<group>"; };
+		5466B97C1923EC2177EDDB7D /* MimicDemoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MimicDemoApp.swift; sourceTree = "<group>"; };
+		7630BC65154FA1BF52B74042 /* Mimic */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Mimic; path = ..; sourceTree = SOURCE_ROOT; };
+		9AE02F4E4FDB62CCD056D11C /* WeatherViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherViewModel.swift; sourceTree = "<group>"; };
+		D03178F046905F2CD5DD4A81 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		F26072F02EB80A3A95941484 /* MimicDemoAppTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = MimicDemoAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		C460B1E4C25D11EEDC755984 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B9A5273F9B79013BD34C5ED8 /* Mimic in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		285C2FDDCA2CA0A91A67B347 = {
+			isa = PBXGroup;
+			children = (
+				C80C946C7457FC7657DC5CE9 /* App */,
+				DE377C0A7AA142A50951CBC4 /* Packages */,
+				B82841EA3A804CC18AA89C00 /* Tests */,
+				5AAA16AEEBB00533D294C964 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		5AAA16AEEBB00533D294C964 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				2245E79E1F31761E088DBF1A /* MimicDemoApp.app */,
+				F26072F02EB80A3A95941484 /* MimicDemoAppTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		B82841EA3A804CC18AA89C00 /* Tests */ = {
+			isa = PBXGroup;
+			children = (
+				2FE4647FFC8DE34BEEA85C74 /* WeatherViewModelTests.swift */,
+			);
+			path = Tests;
+			sourceTree = "<group>";
+		};
+		C80C946C7457FC7657DC5CE9 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				D03178F046905F2CD5DD4A81 /* ContentView.swift */,
+				5466B97C1923EC2177EDDB7D /* MimicDemoApp.swift */,
+				9AE02F4E4FDB62CCD056D11C /* WeatherViewModel.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		DE377C0A7AA142A50951CBC4 /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				7630BC65154FA1BF52B74042 /* Mimic */,
+			);
+			name = Packages;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		14A7C4A0EC50DF00C829C763 /* MimicDemoApp */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D0740F7FB8E13964F80C45F9 /* Build configuration list for PBXNativeTarget "MimicDemoApp" */;
+			buildPhases = (
+				CDC7360DB475383F5588BCE8 /* Sources */,
+				C460B1E4C25D11EEDC755984 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = MimicDemoApp;
+			packageProductDependencies = (
+				11B0400A18BD8379B787D837 /* Mimic */,
+			);
+			productName = MimicDemoApp;
+			productReference = 2245E79E1F31761E088DBF1A /* MimicDemoApp.app */;
+			productType = "com.apple.product-type.application";
+		};
+		D97D954552F331CDF97A5F7E /* MimicDemoAppTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 908FDE356D0379F2D797CE57 /* Build configuration list for PBXNativeTarget "MimicDemoAppTests" */;
+			buildPhases = (
+				8398384FA4EADB5B974E36D2 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				C162653C1F7D891F2B38323D /* PBXTargetDependency */,
+			);
+			name = MimicDemoAppTests;
+			packageProductDependencies = (
+			);
+			productName = MimicDemoAppTests;
+			productReference = F26072F02EB80A3A95941484 /* MimicDemoAppTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		DE694CA6618A36052071278A /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+				};
+			};
+			buildConfigurationList = 17C8A5FADC0EBBF596568A0E /* Build configuration list for PBXProject "MimicDemoApp" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 285C2FDDCA2CA0A91A67B347;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				8F154CE9E4632C3AB839C217 /* XCLocalSwiftPackageReference "..//" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 5AAA16AEEBB00533D294C964 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				14A7C4A0EC50DF00C829C763 /* MimicDemoApp */,
+				D97D954552F331CDF97A5F7E /* MimicDemoAppTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		8398384FA4EADB5B974E36D2 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FC98C892287C62461E9D04C4 /* WeatherViewModelTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CDC7360DB475383F5588BCE8 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BED1083E7554546EADE32AFB /* ContentView.swift in Sources */,
+				F32B9E0B017EC7278B58001E /* MimicDemoApp.swift in Sources */,
+				06CDB43D30E02A57CEB1A6D8 /* WeatherViewModel.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		C162653C1F7D891F2B38323D /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 14A7C4A0EC50DF00C829C763 /* MimicDemoApp */;
+			targetProxy = C243DCE97566160AD3EE6F96 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		11257C72CE292FC73F18CD7F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		56E83688FA0778B1816D17EB /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mimic.demoapp;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		6415FEC4E94EFB17563C49B2 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mimic.demoapp;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		92866438C14B1AB56CA76CE4 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.mimic.demoapp.tests;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MimicDemoApp.app/MimicDemoApp";
+			};
+			name = Debug;
+		};
+		BA3657F7A600E1C4DDA82F66 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.mimic.demoapp.tests;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MimicDemoApp.app/MimicDemoApp";
+			};
+			name = Release;
+		};
+		EE6DB1DF9D8B34CEA96534E5 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		17C8A5FADC0EBBF596568A0E /* Build configuration list for PBXProject "MimicDemoApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				EE6DB1DF9D8B34CEA96534E5 /* Debug */,
+				11257C72CE292FC73F18CD7F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		908FDE356D0379F2D797CE57 /* Build configuration list for PBXNativeTarget "MimicDemoAppTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				92866438C14B1AB56CA76CE4 /* Debug */,
+				BA3657F7A600E1C4DDA82F66 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		D0740F7FB8E13964F80C45F9 /* Build configuration list for PBXNativeTarget "MimicDemoApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				6415FEC4E94EFB17563C49B2 /* Debug */,
+				56E83688FA0778B1816D17EB /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		8F154CE9E4632C3AB839C217 /* XCLocalSwiftPackageReference "..//" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = "..//";
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		11B0400A18BD8379B787D837 /* Mimic */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Mimic;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = DE694CA6618A36052071278A /* Project object */;
+}
