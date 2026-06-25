@@ -17,19 +17,28 @@ public struct MockableMacro: PeerMacro {
 
         let protocolName = proto.name.text
         let mockName = "Mock\(protocolName)"
+        let access = accessKeyword(for: proto.modifiers)
+
+        // Disambiguate overloaded methods up front so handler/recording names
+        // never collide, regardless of source order.
+        let functions = proto.memberBlock.members.compactMap {
+            $0.decl.as(FunctionDeclSyntax.self)
+        }
+        let prefixes = disambiguatedPrefixes(for: functions)
 
         var members: [String] = []
-        var seenNames: Set<String> = []
-
+        var functionIndex = 0
         for item in proto.memberBlock.members {
             if let function = item.decl.as(FunctionDeclSyntax.self) {
-                let base = function.name.text
-                if !seenNames.insert(base).inserted {
-                    throw MimicError.overloadedMember(base)
-                }
-                members.append(try functionMembers(function, mockName: mockName))
+                members.append(functionMembers(
+                    function,
+                    memberPrefix: prefixes[functionIndex],
+                    mockName: mockName,
+                    access: access
+                ))
+                functionIndex += 1
             } else if let variable = item.decl.as(VariableDeclSyntax.self) {
-                members.append(contentsOf: propertyMembers(variable, mockName: mockName))
+                members.append(contentsOf: propertyMembers(variable, mockName: mockName, access: access))
             }
         }
 
@@ -40,8 +49,8 @@ public struct MockableMacro: PeerMacro {
             .joined(separator: "\n")
 
         let mock: DeclSyntax = """
-        final class \(raw: mockName): \(raw: protocolName) {
-            init() {}
+        \(raw: access)final class \(raw: mockName): \(raw: protocolName) {
+            \(raw: access)init() {}
 
         \(raw: body)
         }
@@ -58,11 +67,17 @@ private struct Param {
     let type: String
 }
 
-private func functionMembers(_ function: FunctionDeclSyntax, mockName: String) throws -> String {
+private func functionMembers(
+    _ function: FunctionDeclSyntax,
+    memberPrefix: String,
+    mockName: String,
+    access: String
+) -> String {
     let name = function.name.text
     let signature = function.signature
     let isAsync = signature.effectSpecifiers?.asyncSpecifier != nil
     let isThrows = signature.effectSpecifiers?.throwsClause != nil
+    let isStatic = function.modifiers.contains { $0.name.text == "static" }
     let returnType = signature.returnClause?.type.trimmedDescription
 
     let params: [Param] = signature.parameterClause.parameters.map { p in
@@ -75,6 +90,16 @@ private func functionMembers(_ function: FunctionDeclSyntax, mockName: String) t
         )
     }
 
+    // Member modifier prefixes. `static` requirements need static storage marked
+    // `nonisolated(unsafe)` (mutable static state is otherwise rejected under the
+    // Swift 6 language mode). The counters expose a public getter but stay
+    // privately settable. Methods don't store state, so they skip the escape hatch.
+    let staticKw = isStatic ? "static " : ""
+    let storedStatic = isStatic ? "nonisolated(unsafe) static " : ""
+    let member = "\(access)\(storedStatic)"
+    let counter = "\(access)private(set) \(storedStatic)"
+    let methodPrefix = "\(access)\(staticKw)"
+
     // Closure / handler type, e.g. `((Int, String) async throws -> Bool)?`
     let effects = "\(isAsync ? " async" : "")\(isThrows ? " throws" : "")"
     let closureParams = params.map(\.type).joined(separator: ", ")
@@ -82,21 +107,21 @@ private func functionMembers(_ function: FunctionDeclSyntax, mockName: String) t
 
     // Call-recording storage.
     var storage = """
-    var \(name)Handler: \(handlerType)
-    private(set) var \(name)CallCount = 0
+    \(member)var \(memberPrefix)Handler: \(handlerType)
+    \(counter)var \(memberPrefix)CallCount = 0
     """
     let recordLine: String
     switch params.count {
     case 0:
         recordLine = ""
     case 1:
-        storage += "\nprivate(set) var \(name)Calls: [\(params[0].type)] = []"
-        recordLine = "    \(name)Calls.append(\(params[0].name))"
+        storage += "\n\(counter)var \(memberPrefix)Calls: [\(params[0].type)] = []"
+        recordLine = "    \(memberPrefix)Calls.append(\(params[0].name))"
     default:
         let tupleType = params.map { "\($0.name): \($0.type)" }.joined(separator: ", ")
         let tupleValue = params.map { "\($0.name): \($0.name)" }.joined(separator: ", ")
-        storage += "\nprivate(set) var \(name)Calls: [(\(tupleType))] = []"
-        recordLine = "    \(name)Calls.append((\(tupleValue)))"
+        storage += "\n\(counter)var \(memberPrefix)Calls: [(\(tupleType))] = []"
+        recordLine = "    \(memberPrefix)Calls.append((\(tupleValue)))"
     }
 
     // Reconstruct the declaration so the mock conforms to the protocol exactly.
@@ -112,27 +137,27 @@ private func functionMembers(_ function: FunctionDeclSyntax, mockName: String) t
     let returnClause = returnType.map { " -> \($0)" } ?? ""
 
     let callArgs = params.map(\.name).joined(separator: ", ")
-    let prefix = "\(isThrows ? "try " : "")\(isAsync ? "await " : "")"
+    let callPrefix = "\(isThrows ? "try " : "")\(isAsync ? "await " : "")"
 
     let invocation: String
     if let returnType, returnType != "Void" {
         invocation = """
-            guard let \(name)Handler else {
-                fatalError("\(mockName).\(name) was called before its `\(name)Handler` was set.")
+            guard let \(memberPrefix)Handler else {
+                fatalError("\(mockName).\(name) was called before its `\(memberPrefix)Handler` was set.")
             }
-            return \(prefix)\(name)Handler(\(callArgs))
+            return \(callPrefix)\(memberPrefix)Handler(\(callArgs))
         """
     } else {
-        invocation = "    \(prefix)\(name)Handler?(\(callArgs))"
+        invocation = "    \(callPrefix)\(memberPrefix)Handler?(\(callArgs))"
     }
 
-    let bodyLines = ["    \(name)CallCount += 1", recordLine, invocation]
+    let bodyLines = ["    \(memberPrefix)CallCount += 1", recordLine, invocation]
         .filter { !$0.isEmpty }
         .joined(separator: "\n")
 
     return """
     \(storage)
-    func \(name)(\(paramText))\(effects)\(returnClause) {
+    \(methodPrefix)func \(name)(\(paramText))\(effects)\(returnClause) {
     \(bodyLines)
     }
     """
@@ -140,7 +165,11 @@ private func functionMembers(_ function: FunctionDeclSyntax, mockName: String) t
 
 // MARK: - Property members
 
-private func propertyMembers(_ variable: VariableDeclSyntax, mockName: String) -> [String] {
+private func propertyMembers(
+    _ variable: VariableDeclSyntax,
+    mockName: String,
+    access: String
+) -> [String] {
     guard let binding = variable.bindings.first,
           let pattern = binding.pattern.as(IdentifierPatternSyntax.self),
           let type = binding.typeAnnotation?.type
@@ -148,19 +177,23 @@ private func propertyMembers(_ variable: VariableDeclSyntax, mockName: String) -
 
     let name = pattern.identifier.text
     let typeText = type.trimmedDescription
+    let isStatic = variable.modifiers.contains { $0.name.text == "static" }
+    let staticKw = isStatic ? "static " : ""
+    let storedStatic = isStatic ? "nonisolated(unsafe) static " : ""
+    let storedMember = "\(access)\(storedStatic)"
 
     // An optional requirement is satisfied by a plain stored property (defaulting
     // to nil), which is also settable from the test.
     if type.is(OptionalTypeSyntax.self) {
-        return ["var \(name): \(typeText)"]
+        return ["\(storedMember)var \(name): \(typeText)"]
     }
 
     // A non-optional requirement needs a value the mock can't synthesise, so back
     // it with an optional and expose the exact type via a computed accessor.
     // Providing a setter also lets a test assign get-only requirements directly.
     return ["""
-    private var _\(name): \(typeText)?
-    var \(name): \(typeText) {
+    private \(storedStatic)var _\(name): \(typeText)?
+    \(access)\(staticKw)var \(name): \(typeText) {
         get {
             guard let _\(name) else {
                 fatalError("\(mockName).\(name) was read before it was set.")
@@ -172,18 +205,96 @@ private func propertyMembers(_ variable: VariableDeclSyntax, mockName: String) -
     """]
 }
 
+// MARK: - Access level
+
+private func accessKeyword(for modifiers: DeclModifierListSyntax) -> String {
+    for modifier in modifiers {
+        switch modifier.name.text {
+        case "public", "open": return "public "
+        case "package": return "package "
+        default: continue
+        }
+    }
+    return ""
+}
+
+// MARK: - Overload disambiguation
+
+/// Returns a stable, unique member-name prefix for each function. A method whose
+/// base name is unique keeps that name; overloaded methods are disambiguated by
+/// argument labels, then by parameter types, with a numeric fallback that
+/// guarantees uniqueness even for `async`/`throws`-only overloads.
+private func disambiguatedPrefixes(for functions: [FunctionDeclSyntax]) -> [String] {
+    var groups: [String: [Int]] = [:]
+    for (index, function) in functions.enumerated() {
+        groups[function.name.text, default: []].append(index)
+    }
+
+    var result = [String](repeating: "", count: functions.count)
+    for (base, indices) in groups {
+        guard indices.count > 1 else {
+            result[indices[0]] = base
+            continue
+        }
+        let byLabel = indices.map { base + labelSuffix(functions[$0]) }
+        if Set(byLabel).count == byLabel.count {
+            for (offset, index) in indices.enumerated() { result[index] = byLabel[offset] }
+        } else {
+            for index in indices { result[index] = base + typeSuffix(functions[index]) }
+        }
+    }
+
+    // Final safety net: force any remaining collisions apart with a numeric tail.
+    var occurrences: [String: Int] = [:]
+    for prefix in result { occurrences[prefix, default: 0] += 1 }
+    var running: [String: Int] = [:]
+    for index in result.indices where occurrences[result[index]]! > 1 {
+        let n = (running[result[index]] ?? 0) + 1
+        running[result[index]] = n
+        result[index] += "\(n)"
+    }
+    return result
+}
+
+private func labelSuffix(_ function: FunctionDeclSyntax) -> String {
+    function.signature.parameterClause.parameters.map { p in
+        let first = p.firstName.text
+        let token = first != "_" ? first : (p.secondName?.text ?? first)
+        return token.capitalizedFirstLetter
+    }.joined()
+}
+
+private func typeSuffix(_ function: FunctionDeclSyntax) -> String {
+    let labels = labelSuffix(function)
+    let types = function.signature.parameterClause.parameters.map { p in
+        p.type.trimmedDescription.alphanumericsOnly.capitalizedFirstLetter
+    }.joined()
+    let effects = function.signature.effectSpecifiers
+    let async = effects?.asyncSpecifier != nil ? "Async" : ""
+    let throwing = effects?.throwsClause != nil ? "Throws" : ""
+    return labels + types + async + throwing
+}
+
+private extension String {
+    var capitalizedFirstLetter: String {
+        guard let first else { return self }
+        return first.uppercased() + dropFirst()
+    }
+
+    var alphanumericsOnly: String {
+        filter { $0.isLetter || $0.isNumber }
+    }
+}
+
 // MARK: - Diagnostics
 
 enum MimicError: Error, CustomStringConvertible {
     case notAProtocol
-    case overloadedMember(String)
 
     var description: String {
         switch self {
         case .notAProtocol:
             return "@Mockable can only be attached to a protocol."
-        case .overloadedMember(let name):
-            return "@Mockable does not yet support overloaded members ('\(name)' appears more than once)."
         }
     }
 }

@@ -42,9 +42,14 @@ For every protocol requirement the mock gains:
 | `func reset()` (void) | handler is optional — no stub needed; the call is still counted |
 | `var token: String? { get set }` | a settable stored property |
 | `var isReady: Bool { get }` | a settable property (reading before it's set traps with a clear message) |
+| overloaded methods | handler/recording names are disambiguated by argument label, e.g. `value(for:)` → `valueForHandler`, `value(at:)` → `valueAtHandler` |
+| `static` requirements | generated as `static` members on the mock type |
 
 A non-void method called before its handler is set traps with a message that names the
 member, so a missing stub fails loudly instead of silently returning a default.
+
+The generated mock mirrors the protocol's access level: a `public` (or `package`) protocol
+produces a `public` (or `package`) mock so it's usable from a separate test module.
 
 ## Why no third-party dependencies?
 
@@ -78,11 +83,10 @@ then `@testable import MyApp` to use it.
 
 ## Current limitations
 
-These are explicit, diagnosed where possible, and on the roadmap:
+On the [roadmap](ROADMAP.md):
 
-- **Overloaded members** (same method name, different signatures) are rejected with a
-  diagnostic — handler/recording names would collide.
-- **Generic methods** and **`static` requirements** aren't generated yet.
+- **Generic methods** (`func decode<T>(_:) -> T`) aren't generated yet.
+- **`subscript`** requirements and inherited/composed protocol requirements aren't walked.
 - Properties with effectful accessors (`{ get async throws }`) aren't supported.
 
 ## Running the tests

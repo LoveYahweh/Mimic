@@ -39,6 +39,41 @@ final class MacroExpansionTests: XCTestCase {
         )
     }
 
+    func testMirrorsPublicAccess() {
+        assertMacroExpansion(
+            """
+            @Mockable
+            public protocol Flag {
+                var isOn: Bool { get }
+            }
+            """,
+            expandedSource: """
+            public protocol Flag {
+                var isOn: Bool { get }
+            }
+
+            public final class MockFlag: Flag {
+                public init() {
+                }
+
+                private var _isOn: Bool?
+                public var isOn: Bool {
+                    get {
+                        guard let _isOn else {
+                            fatalError("MockFlag.isOn was read before it was set.")
+                        }
+                        return _isOn
+                    }
+                    set {
+                        _isOn = newValue
+                    }
+                }
+            }
+            """,
+            macros: macros
+        )
+    }
+
     func testDiagnosesNonProtocol() {
         assertMacroExpansion(
             """
