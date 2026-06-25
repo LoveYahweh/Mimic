@@ -43,8 +43,9 @@ For every protocol requirement the mock gains:
 
 | Member | Generated API |
 | --- | --- |
-| `func load(id: Int) -> String` | `loadHandler: ((Int) -> String)?` · `loadCallCount` · `loadCalls: [Int]` |
+| `func load(id: Int) -> String` | `loadHandler: ((Int) -> String)?` · `loadCallCount` · `loadCalls: [Int]` · `loadWasCalled` · `loadLastCall` |
 | multi-parameter method | `…Calls` records a **labelled tuple**, e.g. `[(name: String, value: Int)]` |
+| method returning `Optional`/`Array`/`Dictionary`/`Set` | returns an empty value when unstubbed — no handler needed |
 | `async` / `throws` method | the handler closure mirrors the effects: `((Int) async throws -> String)?` |
 | `func reset()` (void) | handler is optional — no stub needed; the call is still counted |
 | `var token: String? { get set }` | a settable stored property |
@@ -57,6 +58,16 @@ For every protocol requirement the mock gains:
 
 Every mock also gets a `mimicReset()` that clears all handlers, call counts, recorded
 arguments, and property values — handy for shared or reused mocks.
+
+## Worked example
+
+[`Sources/MimicDemo`](Sources/MimicDemo) is a small checkout subsystem — a
+`CheckoutCoordinator` orchestrating five protocol dependencies (cart, inventory, payment,
+coupons, analytics) covering sync methods, `async throws`, a completion handler, a
+collection property, and a void analytics call. [`Tests/MimicDemoTests`](Tests/MimicDemoTests)
+drives it entirely through the generated mocks — stubbing with `…ReturnValue` and
+`…Handler`, asserting on `…CallCount`/`…LastCall`/`…WasCalled`, and resetting with
+`mimicReset()`. It doubles as living documentation for how the mocks read in real tests.
 
 A non-void method called before its handler is set traps with a message that names the
 member, so a missing stub fails loudly instead of silently returning a default.

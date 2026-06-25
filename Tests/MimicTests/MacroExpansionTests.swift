@@ -25,6 +25,12 @@ final class MacroExpansionTests: XCTestCase {
                 var greetHandler: ((String) -> String)?
                 private(set) var greetCallCount = 0
                 private(set) var greetCalls: [String] = []
+                var greetWasCalled: Bool {
+                    greetCallCount > 0
+                }
+                var greetLastCall: Optional<String> {
+                    greetCalls.last
+                }
                 private var _greetReturnValue: String?
                 var greetReturnValue: String {
                     get {

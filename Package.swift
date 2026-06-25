@@ -39,6 +39,9 @@ let package = Package(
         // A client of the library, which is able to use the macro in its own code.
         .executableTarget(name: "MimicClient", dependencies: ["Mimic"]),
 
+        // A realistic example subsystem whose dependencies are mocked with Mimic.
+        .target(name: "MimicDemo", dependencies: ["Mimic"]),
+
         // A test target used to develop the macro implementation.
         .testTarget(
             name: "MimicTests",
@@ -48,6 +51,9 @@ let package = Package(
                 .product(name: "SwiftSyntaxMacrosTestSupport", package: "swift-syntax"),
             ]
         ),
+
+        // Tests that exercise the demo subsystem entirely through generated mocks.
+        .testTarget(name: "MimicDemoTests", dependencies: ["MimicDemo"]),
     ],
     swiftLanguageModes: [.v6]
 )

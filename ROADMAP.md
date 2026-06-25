@@ -32,12 +32,14 @@ pinned macro-expansion contract. Runtime stays **zero third-party** throughout �
 - **Async & throws** — `async`, `throws`, and **typed throws** (`throws(MyError)`) are
   carried through verbatim into both the handler type and the conforming method
 
-## v0.4 — Stubbing ergonomics, continued
+## v0.4 — Stubbing ergonomics, continued ✅ (shipped)
 
-- Sensible default returns for `Void`, `Optional`, and empty collections so trivial
-  methods need no stub at all
-- `…LastCall` convenience and a `wasCalled` flag per member
-- Per-handler call-order assertions across members
+- Default returns for `Optional`, `Array`, `Dictionary`, and `Set` so trivial methods
+  need no stub at all
+- `…LastCall` convenience and a `…WasCalled` flag per member
+- A worked `MimicDemo` example subsystem with a full mock-driven test suite
+
+Still open: per-handler call-order assertions across members.
 
 ## v0.5 — Surface coverage
 

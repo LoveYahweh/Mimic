@@ -98,7 +98,8 @@ private func functionMembers(
     let name = function.name.text
     let signature = function.signature
     let isStatic = function.modifiers.contains { $0.name.text == "static" }
-    let returnType = signature.returnClause?.type.trimmedDescription
+    let returnTypeSyntax = signature.returnClause?.type
+    let returnType = returnTypeSyntax?.trimmedDescription
 
     // Effects are copied verbatim so typed throws (`throws(MyError)`) survives.
     let isAsync = signature.effectSpecifiers?.asyncSpecifier != nil
@@ -156,6 +157,17 @@ private func functionMembers(
         resetLines.append("\(memberPrefix)Calls = []")
     }
 
+    // Convenience accessors over the recorded state.
+    storage += "\n\(access)\(staticKw)var \(memberPrefix)WasCalled: Bool { \(memberPrefix)CallCount > 0 }"
+    if !params.isEmpty {
+        let element = params.count == 1
+            ? params[0].bareType
+            : "(\(params.map { "\($0.name): \($0.bareType)" }.joined(separator: ", ")))"
+        // `Optional<…>` rather than `…?` so a function-typed element (e.g. a
+        // completion closure) doesn't bind the `?` onto its return type.
+        storage += "\n\(access)\(staticKw)var \(memberPrefix)LastCall: Optional<\(element)> { \(memberPrefix)Calls.last }"
+    }
+
     // `…ReturnValue` shorthand: assigning it stubs a handler that ignores the
     // arguments and returns the value, so trivial stubs need no closure.
     if let returnType, returnType != "Void" {
@@ -196,9 +208,14 @@ private func functionMembers(
 
     let invocation: String
     if let returnType, returnType != "Void" {
+        // Methods returning an optional or a collection fall back to an empty
+        // value when unstubbed; anything else traps so a missing stub is loud.
+        let fallback = returnTypeSyntax.flatMap(defaultReturn(for:))
+        let missingHandler = fallback.map { "return \($0)" }
+            ?? "fatalError(\"\(mockName).\(name) needs `\(memberPrefix)ReturnValue` or `\(memberPrefix)Handler` to be set.\")"
         invocation = """
             guard let \(memberPrefix)Handler else {
-                fatalError("\(mockName).\(name) needs `\(memberPrefix)ReturnValue` or `\(memberPrefix)Handler` to be set.")
+                \(missingHandler)
             }
             return \(callPrefix)\(memberPrefix)Handler(\(callArgs))
         """
@@ -265,6 +282,25 @@ private func propertyMembers(
 }
 
 // MARK: - Types
+
+/// The empty value a method can return when it has no handler, or `nil` if the
+/// return type has no safe default (in which case an unstubbed call traps).
+private func defaultReturn(for type: TypeSyntax) -> String? {
+    if type.is(OptionalTypeSyntax.self) || type.is(ImplicitlyUnwrappedOptionalTypeSyntax.self) {
+        return "nil"
+    }
+    if type.is(ArrayTypeSyntax.self) { return "[]" }
+    if type.is(DictionaryTypeSyntax.self) { return "[:]" }
+    if let ident = type.as(IdentifierTypeSyntax.self) {
+        switch ident.name.text {
+        case "Optional": return "nil"
+        case "Array", "ContiguousArray", "Set": return "[]"
+        case "Dictionary": return "[:]"
+        default: return nil
+        }
+    }
+    return nil
+}
 
 /// Drops parameter attributes (`@escaping`, `@autoclosure`) while keeping
 /// specifiers (`inout`), so the type is valid inside a stored closure.
