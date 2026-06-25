@@ -159,27 +159,83 @@ final class MacroExpansionTests: XCTestCase {
         )
     }
 
-    func testWarnsOnSubscriptRequirement() {
+    func testExpandsSubscript() {
         assertMacroExpansion(
             """
             @Mockable
             protocol Store {
-                subscript(key: String) -> Int { get }
+                subscript(index: Int) -> String { get set }
             }
             """,
             expandedSource: """
             protocol Store {
-                subscript(key: String) -> Int { get }
+                subscript(index: Int) -> String { get set }
             }
 
             final class MockStore: Store {
+                init() {
+                }
+
+                var subscriptGetHandler: ((Int) -> String)?
+                private(set) var subscriptGetCallCount = 0
+                private(set) var subscriptGetCalls: [Int] = []
+                var subscriptSetHandler: ((Int, String) -> Void)?
+                private(set) var subscriptSetCallCount = 0
+                private(set) var subscriptSetCalls: [(index: Int, newValue: String)] = []
+                var subscriptGetWasCalled: Bool {
+                    subscriptGetCallCount > 0
+                }
+                subscript(index: Int) -> String {
+                    get {
+                        subscriptGetCallCount += 1
+                        subscriptGetCalls.append(index)
+                        guard let subscriptGetHandler else {
+                            fatalError("MockStore subscript needs `subscriptGetHandler` to be set.")
+                        }
+                        return subscriptGetHandler(index)
+                    }
+                    set {
+                        subscriptSetCallCount += 1
+                        subscriptSetCalls.append((index: index, newValue: newValue))
+                        subscriptSetHandler?(index, newValue)
+                    }
+                }
+
+                func mimicReset() {
+                    subscriptGetHandler = nil
+                    subscriptGetCallCount = 0
+                    subscriptGetCalls = []
+                    subscriptSetHandler = nil
+                    subscriptSetCallCount = 0
+                    subscriptSetCalls = []
+                }
+            }
+            """,
+            macros: macros
+        )
+    }
+
+    func testWarnsOnInitRequirement() {
+        assertMacroExpansion(
+            """
+            @Mockable
+            protocol Factory {
+                init(value: Int)
+            }
+            """,
+            expandedSource: """
+            protocol Factory {
+                init(value: Int)
+            }
+
+            final class MockFactory: Factory {
                 init() {
                 }
             }
             """,
             diagnostics: [
                 DiagnosticSpec(
-                    message: "@Mockable doesn't generate `subscript` requirements yet, so MockStore won't conform until you add one by hand.",
+                    message: "@Mockable doesn't generate `init` requirements yet, so MockFactory won't conform until you add one by hand.",
                     line: 3,
                     column: 5,
                     severity: .warning

@@ -47,7 +47,9 @@ Still open: per-handler call-order assertions across members.
   and force-cast back; generic clause + `where` clause preserved on the method
 - **Variadic parameters** ✅ (`Int...`) — captured as an array in the handler/recording
 - `mutating` requirements ✅ (witnessed by a plain method on the class)
-- Still open: `subscript` requirements, `rethrows`
+- **`subscript` requirements** ✅ — get / get-set, multi-parameter, and overloaded;
+  separate get/set handlers + call recording (set records the new value)
+- Still open: `rethrows`
 - **Not feasible by a peer macro:** inherited / composed protocol requirements. The
   macro only sees the annotated protocol's own syntax, never the parent's members, so
   it can't generate their implementations. Documented as a limitation instead.

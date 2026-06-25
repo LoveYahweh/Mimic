@@ -50,6 +50,7 @@ For every protocol requirement the mock gains:
 | `func load(id: Int) -> String` | `loadHandler: ((Int) -> String)?` · `loadCallCount` · `loadCalls: [Int]` · `loadWasCalled` · `loadLastCall` |
 | multi-parameter method | `…Calls` records a **labelled tuple**, e.g. `[(name: String, value: Int)]` |
 | method returning `Optional`/`Array`/`Dictionary`/`Set` | returns an empty value when unstubbed — no handler needed |
+| `subscript(…) -> T { get set }` | `subscriptGetHandler` / `subscriptSetHandler` · `subscriptGetCalls` / `subscriptSetCalls` (set records the new value) |
 | `async` / `throws` method | the handler closure mirrors the effects: `((Int) async throws -> String)?` |
 | `func reset()` (void) | handler is optional — no stub needed; the call is still counted |
 | `var token: String? { get set }` | a settable stored property |
@@ -119,8 +120,9 @@ Sync / `async` / `throws` / typed `throws` methods · **generic methods** (type-
 **variadic**, `inout`, `borrowing`/`consuming`, closure, tuple, optional, and defaulted
 parameters · keyword parameter names · `Self` results and parameters · `mutating` /
 `static` requirements · overloads (by label, arity, type, or async-ness) · get-only /
-get-set / optional / collection / function-type properties · **`@MainActor` (and custom
-global-actor) protocols, including `nonisolated` members** · access-level mirroring.
+get-set / optional / collection / function-type properties · **`subscript` requirements
+(get / get-set, multi-parameter, overloaded)** · **`@MainActor` (and custom global-actor)
+protocols, including `nonisolated` members** · access-level mirroring.
 
 Generic methods are type-erased: the handler trades in `Any` and the result is force-cast
 back to the requested type, so `let x: Int = mock.decode("1")` works while keeping the
@@ -130,9 +132,8 @@ mock storable.
 
 On the [roadmap](ROADMAP.md):
 
-- **`subscript`** and **`rethrows`** requirements aren't generated yet (subscript/`init`/
-  `associatedtype` requirements emit a clear warning rather than a confusing conformance
-  error).
+- **`rethrows`** requirements aren't generated yet (`init`/`associatedtype` requirements
+  emit a clear warning rather than a confusing conformance error).
 - A **non-escaping closure hidden behind a `typealias`** can't be detected — a macro can't
   resolve the alias — so it's recorded and won't compile. Use the closure type inline, or
   mark it `@escaping`.

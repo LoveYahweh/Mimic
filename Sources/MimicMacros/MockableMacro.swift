@@ -35,9 +35,14 @@ public struct MockableMacro: PeerMacro {
             $0.decl.as(FunctionDeclSyntax.self)
         }
         let prefixes = disambiguatedPrefixes(for: functions)
+        let subscripts = proto.memberBlock.members.compactMap {
+            $0.decl.as(SubscriptDeclSyntax.self)
+        }
+        let subscriptPrefixes = subscriptDisambiguatedPrefixes(for: subscripts)
 
         var members: [GeneratedMember] = []
         var functionIndex = 0
+        var subscriptIndex = 0
         for item in proto.memberBlock.members {
             if let function = item.decl.as(FunctionDeclSyntax.self) {
                 members.append(functionMembers(
@@ -51,6 +56,15 @@ public struct MockableMacro: PeerMacro {
             } else if let variable = item.decl.as(VariableDeclSyntax.self),
                       let member = propertyMembers(variable, mockName: mockName, access: access, globalActor: globalActor) {
                 members.append(member)
+            } else if let subscriptDecl = item.decl.as(SubscriptDeclSyntax.self) {
+                members.append(subscriptMembers(
+                    subscriptDecl,
+                    memberPrefix: subscriptPrefixes[subscriptIndex],
+                    mockName: mockName,
+                    access: access,
+                    globalActor: globalActor
+                ))
+                subscriptIndex += 1
             } else if let unsupported = unsupportedMemberDescription(item.decl) {
                 // Warn clearly rather than leave a confusing "does not conform" error.
                 context.diagnose(Diagnostic(
@@ -115,40 +129,14 @@ private struct Param {
     var callArgument: String { isInout ? "&\(escapedName)" : escapedName }
 }
 
-private func functionMembers(
-    _ function: FunctionDeclSyntax,
-    memberPrefix: String,
-    mockName: String,
-    access: String,
-    globalActor: String
-) -> GeneratedMember {
-    let name = function.name.text
-    let signature = function.signature
-    let isStatic = function.modifiers.contains { $0.name.text == "static" }
-    let returnTypeSyntax = signature.returnClause?.type
-    let returnType = returnTypeSyntax?.trimmedDescription
-
-    // Generic methods can't be stored as concrete closures, so any type that
-    // mentions a generic parameter is erased to `Any` in storage and force-cast
-    // back inside the method body. The method signature keeps its generics intact.
-    let genericNames = Set(function.genericParameterClause?.parameters.map { $0.name.text } ?? [])
-    let genericClause = function.genericParameterClause?.trimmedDescription ?? ""
-    let whereClause = function.genericWhereClause.map { " \($0.trimmedDescription)" } ?? ""
-    let returnIsGeneric = returnType.map { referencesGeneric($0, genericNames) } ?? false
-    // `Self` can't be a stored-property type; substitute the concrete mock name
-    // (the mock is `final`, so `Self == MockX`). Returns/ReturnValue are skipped.
-    let returnHasSelf = returnType.map { referencesGeneric($0, ["Self"]) } ?? false
-    let handlerReturn = returnIsGeneric
-        ? "Any"
-        : substitutingSelf(returnType ?? "Void", with: mockName)
-
-    // Effects are copied verbatim so typed throws (`throws(MyError)`) survives.
-    let isAsync = signature.effectSpecifiers?.asyncSpecifier != nil
-    let throwsClause = signature.effectSpecifiers?.throwsClause
-    let isThrows = throwsClause != nil
-    let effects = "\(isAsync ? " async" : "")\(throwsClause.map { " \($0.trimmedDescription)" } ?? "")"
-
-    let params: [Param] = signature.parameterClause.parameters.map { p in
+/// Parses a parameter clause (shared by methods and subscripts) into the data
+/// needed for the handler type, recording, signature, and call forwarding.
+private func parsedParameters(
+    _ parameters: FunctionParameterListSyntax,
+    genericNames: Set<String>,
+    mockName: String
+) -> [Param] {
+    parameters.map { p in
         let first = unescapedIdentifier(p.firstName.text)
         let second = p.secondName.map { unescapedIdentifier($0.text) }
         let isVariadic = p.ellipsis != nil
@@ -161,8 +149,8 @@ private func functionMembers(
         let isGeneric = referencesGeneric(base, genericNames)
         let storedBase = isGeneric ? "Any" : substitutingSelf(base, with: mockName)
 
-        // The type as written in the conforming method keeps attributes and `inout`
-        // (so `@escaping` params still conform) but not `...`, which is appended.
+        // The type as written in the conforming declaration keeps attributes and
+        // `inout` (so `@escaping` params still conform) but not `...`, appended below.
         // `Self` is substituted because a class can't take covariant `Self` as a
         // parameter (the mock is `final`, so the concrete type is equivalent).
         let sigBase = substitutingSelf(base, with: mockName)
@@ -200,6 +188,42 @@ private func functionMembers(
             recordable: recordable
         )
     }
+}
+
+private func functionMembers(
+    _ function: FunctionDeclSyntax,
+    memberPrefix: String,
+    mockName: String,
+    access: String,
+    globalActor: String
+) -> GeneratedMember {
+    let name = function.name.text
+    let signature = function.signature
+    let isStatic = function.modifiers.contains { $0.name.text == "static" }
+    let returnTypeSyntax = signature.returnClause?.type
+    let returnType = returnTypeSyntax?.trimmedDescription
+
+    // Generic methods can't be stored as concrete closures, so any type that
+    // mentions a generic parameter is erased to `Any` in storage and force-cast
+    // back inside the method body. The method signature keeps its generics intact.
+    let genericNames = Set(function.genericParameterClause?.parameters.map { $0.name.text } ?? [])
+    let genericClause = function.genericParameterClause?.trimmedDescription ?? ""
+    let whereClause = function.genericWhereClause.map { " \($0.trimmedDescription)" } ?? ""
+    let returnIsGeneric = returnType.map { referencesGeneric($0, genericNames) } ?? false
+    // `Self` can't be a stored-property type; substitute the concrete mock name
+    // (the mock is `final`, so `Self == MockX`). Returns/ReturnValue are skipped.
+    let returnHasSelf = returnType.map { referencesGeneric($0, ["Self"]) } ?? false
+    let handlerReturn = returnIsGeneric
+        ? "Any"
+        : substitutingSelf(returnType ?? "Void", with: mockName)
+
+    // Effects are copied verbatim so typed throws (`throws(MyError)`) survives.
+    let isAsync = signature.effectSpecifiers?.asyncSpecifier != nil
+    let throwsClause = signature.effectSpecifiers?.throwsClause
+    let isThrows = throwsClause != nil
+    let effects = "\(isAsync ? " async" : "")\(throwsClause.map { " \($0.trimmedDescription)" } ?? "")"
+
+    let params = parsedParameters(signature.parameterClause.parameters, genericNames: genericNames, mockName: mockName)
     let recordableParams = params.filter(\.recordable)
 
     // A `nonisolated` requirement on an actor-isolated protocol needs a
@@ -354,6 +378,122 @@ private func functionMembers(
     \(storage)
     \(methodPrefix)func \(name)\(genericClause)(\(paramText))\(effects)\(returnClause)\(whereClause) {
     \(bodyLines)
+    }
+    """
+    return GeneratedMember(decls: decls, resetLines: isStatic ? [] : resetLines)
+}
+
+// MARK: - Subscript members
+
+private func subscriptMembers(
+    _ decl: SubscriptDeclSyntax,
+    memberPrefix prefix: String,
+    mockName: String,
+    access: String,
+    globalActor: String
+) -> GeneratedMember {
+    let genericNames = Set(decl.genericParameterClause?.parameters.map { $0.name.text } ?? [])
+    let genericClause = decl.genericParameterClause?.trimmedDescription ?? ""
+    let whereClause = decl.genericWhereClause.map { " \($0.trimmedDescription)" } ?? ""
+
+    let returnTypeSyntax = decl.returnClause.type
+    let returnType = returnTypeSyntax.trimmedDescription
+    let returnIsGeneric = referencesGeneric(returnType, genericNames)
+    let returnHasSelf = referencesGeneric(returnType, ["Self"])
+    let handlerReturn = returnIsGeneric ? "Any" : substitutingSelf(returnType, with: mockName)
+    let cast = (returnIsGeneric || returnHasSelf) ? " as! \(returnType)" : ""
+
+    let params = parsedParameters(decl.parameterClause.parameters, genericNames: genericNames, mockName: mockName)
+    let recordableParams = params.filter(\.recordable)
+    let callArgs = params.map(\.callArgument).joined(separator: ", ")
+    let closureParams = params.map(\.bareType).joined(separator: ", ")
+    let paramClause = decl.parameterClause.trimmedDescription
+
+    let isStatic = decl.modifiers.contains { $0.name.text == "static" }
+    let isNonisolated = decl.modifiers.contains { $0.name.text == "nonisolated" }
+    let memberActor = isNonisolated ? "" : globalActor
+    let staticKw = isStatic ? "static " : ""
+    let needsUnsafe = isStatic || (isNonisolated && !globalActor.isEmpty)
+    let storedStatic = "\(needsUnsafe ? "nonisolated(unsafe) " : "")\(staticKw)"
+    let member = "\(access)\(storedStatic)"
+    let counter = "\(access)private(set) \(storedStatic)"
+    let declPrefix = "\(access)\(isNonisolated ? "nonisolated " : "")\(staticKw)"
+
+    var isSettable = false
+    if let block = decl.accessorBlock, case .accessors(let list) = block.accessors {
+        isSettable = list.contains { $0.accessorSpecifier.text == "set" }
+    }
+
+    // Builds the `…Calls` storage + append statement for a list of recorded values.
+    func calls(_ name: String, _ entries: [(label: String, type: String, value: String)]) -> (storage: String, record: String, reset: String) {
+        switch entries.count {
+        case 0:
+            return ("", "", "")
+        case 1:
+            return ("\n\(counter)var \(name)Calls: [\(entries[0].type)] = []",
+                    "        \(name)Calls.append(\(entries[0].value))",
+                    "\(name)Calls = []")
+        default:
+            let types = entries.map { "\($0.label): \($0.type)" }.joined(separator: ", ")
+            let values = entries.map { "\($0.label): \($0.value)" }.joined(separator: ", ")
+            return ("\n\(counter)var \(name)Calls: [(\(types))] = []",
+                    "        \(name)Calls.append((\(values)))",
+                    "\(name)Calls = []")
+        }
+    }
+
+    let indexEntries = recordableParams.map { (label: $0.name, type: $0.recordType, value: $0.escapedName) }
+
+    // Getter storage + body.
+    let getHandlerType = "(\(memberActor)(\(closureParams)) -> \(handlerReturn))?"
+    var storage = """
+    \(member)var \(prefix)GetHandler: \(getHandlerType)
+    \(counter)var \(prefix)GetCallCount = 0
+    """
+    var resetLines = ["\(prefix)GetHandler = nil", "\(prefix)GetCallCount = 0"]
+    let getCalls = calls("\(prefix)Get", indexEntries)
+    storage += getCalls.storage
+    if !getCalls.reset.isEmpty { resetLines.append(getCalls.reset) }
+
+    let fallback = (returnIsGeneric || returnHasSelf) ? nil : defaultReturn(for: returnTypeSyntax)
+    let missingGet = fallback.map { "return \($0)" }
+        ?? "fatalError(\"\(mockName) subscript needs `\(prefix)GetHandler` to be set.\")"
+    var getStatements = ["        \(prefix)GetCallCount += 1"]
+    if !getCalls.record.isEmpty { getStatements.append(getCalls.record) }
+    getStatements.append("""
+            guard let \(prefix)GetHandler else {
+                \(missingGet)
+            }
+            return \(prefix)GetHandler(\(callArgs))\(cast)
+    """)
+    let getter = "    get {\n\(getStatements.joined(separator: "\n"))\n    }"
+
+    var accessors = getter
+    if isSettable {
+        let setHandlerType = "(\(memberActor)(\(closureParams), \(handlerReturn)) -> Void)?"
+        storage += """
+
+        \(member)var \(prefix)SetHandler: \(setHandlerType)
+        \(counter)var \(prefix)SetCallCount = 0
+        """
+        resetLines.append(contentsOf: ["\(prefix)SetHandler = nil", "\(prefix)SetCallCount = 0"])
+        let setCalls = calls("\(prefix)Set", indexEntries + [(label: "newValue", type: handlerReturn, value: "newValue")])
+        storage += setCalls.storage
+        if !setCalls.reset.isEmpty { resetLines.append(setCalls.reset) }
+
+        var setStatements = ["        \(prefix)SetCallCount += 1"]
+        if !setCalls.record.isEmpty { setStatements.append(setCalls.record) }
+        let setArgs = callArgs.isEmpty ? "newValue" : "\(callArgs), newValue"
+        setStatements.append("        \(prefix)SetHandler?(\(setArgs))")
+        accessors += "\n    set {\n\(setStatements.joined(separator: "\n"))\n    }"
+    }
+
+    storage += "\n\(access)\(staticKw)var \(prefix)GetWasCalled: Bool { \(prefix)GetCallCount > 0 }"
+
+    let decls = """
+    \(storage)
+    \(declPrefix)subscript\(genericClause)\(paramClause) -> \(returnType)\(whereClause) {
+    \(accessors)
     }
     """
     return GeneratedMember(decls: decls, resetLines: isStatic ? [] : resetLines)
@@ -586,10 +726,33 @@ private extension String {
 /// Describes a protocol requirement `@Mockable` doesn't generate, or `nil` if the
 /// member needs no warning (e.g. a nested type the mock can simply ignore).
 private func unsupportedMemberDescription(_ decl: DeclSyntax) -> String? {
-    if decl.is(SubscriptDeclSyntax.self) { return "`subscript` requirements" }
     if decl.is(InitializerDeclSyntax.self) { return "`init` requirements" }
     if decl.is(AssociatedTypeDeclSyntax.self) { return "`associatedtype` requirements" }
     return nil
+}
+
+/// Stable, unique member-name prefixes for subscripts (which have no names).
+/// One subscript is just `subscript`; overloads disambiguate by parameter type.
+private func subscriptDisambiguatedPrefixes(for subscripts: [SubscriptDeclSyntax]) -> [String] {
+    guard subscripts.count > 1 else {
+        return subscripts.isEmpty ? [] : ["subscript"]
+    }
+    var result = subscripts.map { decl -> String in
+        let types = decl.parameterClause.parameters
+            .map { $0.type.trimmedDescription.alphanumericsOnly.capitalizedFirstLetter }
+            .joined()
+        return "subscript\(types)"
+    }
+    // Numeric fallback for any remaining collisions.
+    var counts: [String: Int] = [:]
+    for prefix in result { counts[prefix, default: 0] += 1 }
+    var running: [String: Int] = [:]
+    for index in result.indices where counts[result[index]]! > 1 {
+        let n = (running[result[index]] ?? 0) + 1
+        running[result[index]] = n
+        result[index] += "\(n)"
+    }
+    return result
 }
 
 private struct MimicDiagnostic: DiagnosticMessage {
