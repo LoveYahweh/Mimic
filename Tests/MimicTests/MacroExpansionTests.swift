@@ -53,9 +53,21 @@ final class MacroExpansionTests: XCTestCase {
                         queue.count > 1 ? queue.removeFirst() : queue[0]
                     }
                 }
+                private var greetStubs: [(match: ((String) -> Bool), body: ((String) -> String))] = []
+                func greetWhen(_ match: @escaping ((String) -> Bool), return value: String) {
+                    greetStubs.append((match: match, body: { _ in
+                                value
+                            }))
+                }
+                func greetWhen(_ match: @escaping ((String) -> Bool), perform body: @escaping ((String) -> String)) {
+                    greetStubs.append((match: match, body: body))
+                }
                 func greet(name: String) -> String {
                     greetCallCount += 1
                     greetCalls.append(name)
+                    for stub in greetStubs where stub.match(name) {
+                        return stub.body(name)
+                    }
                     guard let greetHandler else {
                         fatalError("MockGreeter.greet needs `greetReturnValue` or `greetHandler` to be set.")
                     }
@@ -67,6 +79,7 @@ final class MacroExpansionTests: XCTestCase {
                     greetCallCount = 0
                     greetCalls = []
                     _greetReturnValue = nil
+                    greetStubs = []
                 }
             }
             """,

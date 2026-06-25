@@ -349,6 +349,34 @@ private func functionMembers(
         """
     }
 
+    // Argument-matched stubs: register `(predicate, body)` pairs that are tried in
+    // order before the handler, so different inputs yield different results. Needs a
+    // parameter to match on; skipped for generic/`Self` returns and for typed throws
+    // (typed-throws function types stored in an array need macOS 15+).
+    let isTypedThrows = throwsClause?.type != nil
+    // A bare function-typed return makes the `return value:` parameter escaping.
+    let returnIsBareFunction = returnTypeSyntax.map {
+        ($0.as(AttributedTypeSyntax.self)?.baseType ?? $0).is(FunctionTypeSyntax.self)
+    } ?? false
+    let hasArgMatching = returnType != nil && returnType != "Void"
+        && !returnIsGeneric && !returnHasSelf && !params.isEmpty && !isTypedThrows
+    if hasArgMatching, let storedReturn {
+        let matchType = "(\(memberActor)(\(closureParams)) -> Bool)"
+        let bodyType = "(\(memberActor)(\(closureParams))\(effects) -> \(storedReturn))"
+        let valueParam = returnIsBareFunction ? "@escaping \(storedReturn)" : storedReturn
+        storage += """
+
+        private \(storedStatic)var \(memberPrefix)Stubs: [(match: \(matchType), body: \(bodyType))] = []
+        \(access)\(staticKw)func \(memberPrefix)When(_ match: @escaping \(matchType), return value: \(valueParam)) {
+            \(memberPrefix)Stubs.append((match: match, body: { \(closureHead)value }))
+        }
+        \(access)\(staticKw)func \(memberPrefix)When(_ match: @escaping \(matchType), perform body: @escaping \(bodyType)) {
+            \(memberPrefix)Stubs.append((match: match, body: body))
+        }
+        """
+        resetLines.append("\(memberPrefix)Stubs = []")
+    }
+
     // Reconstruct the declaration so the mock conforms to the protocol exactly.
     let paramText = params.map { p -> String in
         let head: String
@@ -375,7 +403,11 @@ private func functionMembers(
         let hint = erased ? "`\(memberPrefix)Handler`" : "`\(memberPrefix)ReturnValue` or `\(memberPrefix)Handler`"
         let missingHandler = fallback.map { "return \($0)" }
             ?? "fatalError(\"\(mockName).\(name) needs \(hint) to be set.\")"
-        invocation = """
+        // Matched stubs win over the handler/default.
+        let matchLoop = hasArgMatching
+            ? "    for stub in \(memberPrefix)Stubs where stub.match(\(callArgs)) {\n        return \(callPrefix)stub.body(\(callArgs))\n    }\n"
+            : ""
+        invocation = matchLoop + """
             guard let \(memberPrefix)Handler else {
                 \(missingHandler)
             }

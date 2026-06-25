@@ -71,10 +71,15 @@ DSL, and per-mock nice/strict modes.
   `xcodebuild test` on the iOS simulator
 - `CHANGELOG.md` and the **1.0.0** tag
 
-## Post-1.0 ideas
+## 1.1 ✅ (shipped)
 
-- Argument-matched stubs (`when(arg:)`) and an order-aware verification DSL
-- `subscript` and `rethrows` requirements
+- **Argument-matched stubs** — `…When(_ match:, return:)` / `…When(_ match:, perform:)`,
+  predicate-keyed, tried before the handler.
+
+## Post-1.1 ideas
+
+- Order-aware verification DSL (call ordering across members)
+- `init` and `rethrows` requirements
 - Per-mock nice/strict modes
 
 - DocC catalog with articles and symbol docs

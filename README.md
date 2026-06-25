@@ -56,6 +56,14 @@ mock.temperatureThrowsError(NetworkError.offline)   // throw (throwing requireme
 mock.mimicReset()                                   // clear handlers, counts, recorded calls
 ```
 
+**Argument-matched stubs** let different inputs return different results. Each `…When`
+registers a predicate; the first match wins, otherwise the call falls through to the handler:
+
+```swift
+mock.temperatureWhen({ $0 == "Paris" }, return: 95)
+mock.temperatureWhen({ city in city.hasPrefix("L") }, perform: { _ in throw NetworkError.offline })
+```
+
 …and recording for assertions:
 
 ```swift
@@ -69,7 +77,7 @@ mock.temperatureLastCall    // String?   (most recent arguments)
 
 | Requirement | Generated API |
 | --- | --- |
-| `func load(id: Int) -> String` | `loadHandler` · `loadReturnValue` · `loadReturns(…)` · `loadCallCount` · `loadCalls` · `loadWasCalled` · `loadLastCall` |
+| `func load(id: Int) -> String` | `loadHandler` · `loadReturnValue` · `loadReturns(…)` · `loadWhen(_:return:)` · `loadCallCount` · `loadCalls` · `loadWasCalled` · `loadLastCall` |
 | multi-parameter method | `…Calls` records a **labelled tuple**, e.g. `[(name: String, value: Int)]` |
 | returns `Optional`/`Array`/`Dictionary`/`Set` | returns an empty value when unstubbed — no handler needed |
 | `async` / `throws` / `throws(MyError)` | the handler closure mirrors the effects, typed throws preserved |

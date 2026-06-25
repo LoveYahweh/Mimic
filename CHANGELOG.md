@@ -3,6 +3,15 @@
 All notable changes to Mimic are documented here. This project follows
 [Semantic Versioning](https://semver.org).
 
+## 1.1.0
+
+### Added
+- **Argument-matched stubs.** Each non-void method gains `…When(_ match:, return:)` and
+  `…When(_ match:, perform:)`, registering predicate-keyed stubs that are tried in order
+  before the handler — so different inputs can return different results. Cleared by
+  `mimicReset()`. Skipped for generic / `Self` / typed-throws returns and zero-parameter
+  methods.
+
 ## 1.0.0
 
 First stable release. `@Mockable` generates a `Mock<Protocol>` test double with zero
