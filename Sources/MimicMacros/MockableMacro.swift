@@ -31,9 +31,11 @@ public struct MockableMacro: PeerMacro {
 
         // Disambiguate overloaded methods up front so handler/recording names
         // never collide, regardless of source order.
-        let functions = proto.memberBlock.members.compactMap {
-            $0.decl.as(FunctionDeclSyntax.self)
-        }
+        // Operator requirements (`static func ==`) can't map to an identifier-based
+        // handler name; they're diagnosed and skipped rather than miscompiled.
+        let functions = proto.memberBlock.members
+            .compactMap { $0.decl.as(FunctionDeclSyntax.self) }
+            .filter { !isOperatorName($0.name.text) }
         let prefixes = disambiguatedPrefixes(for: functions)
         let subscripts = proto.memberBlock.members.compactMap {
             $0.decl.as(SubscriptDeclSyntax.self)
@@ -45,14 +47,23 @@ public struct MockableMacro: PeerMacro {
         var subscriptIndex = 0
         for item in proto.memberBlock.members {
             if let function = item.decl.as(FunctionDeclSyntax.self) {
-                members.append(functionMembers(
-                    function,
-                    memberPrefix: prefixes[functionIndex],
-                    mockName: mockName,
-                    access: access,
-                    globalActor: globalActor
-                ))
-                functionIndex += 1
+                if isOperatorName(function.name.text) {
+                    context.diagnose(Diagnostic(
+                        node: function,
+                        message: MimicDiagnostic(
+                            "@Mockable doesn't generate operator requirements, so \(mockName) won't conform until you add one by hand."
+                        )
+                    ))
+                } else {
+                    members.append(functionMembers(
+                        function,
+                        memberPrefix: prefixes[functionIndex],
+                        mockName: mockName,
+                        access: access,
+                        globalActor: globalActor
+                    ))
+                    functionIndex += 1
+                }
             } else if let variable = item.decl.as(VariableDeclSyntax.self),
                       let member = propertyMembers(variable, mockName: mockName, access: access, globalActor: globalActor) {
                 members.append(member)
@@ -729,6 +740,12 @@ private func unsupportedMemberDescription(_ decl: DeclSyntax) -> String? {
     if decl.is(InitializerDeclSyntax.self) { return "`init` requirements" }
     if decl.is(AssociatedTypeDeclSyntax.self) { return "`associatedtype` requirements" }
     return nil
+}
+
+/// Whether a function name is an operator (so it can't form an identifier prefix).
+private func isOperatorName(_ name: String) -> Bool {
+    guard let first = name.first else { return false }
+    return !(first.isLetter || first == "_")
 }
 
 /// Stable, unique member-name prefixes for subscripts (which have no names).
