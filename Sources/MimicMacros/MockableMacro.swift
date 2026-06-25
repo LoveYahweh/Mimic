@@ -1,3 +1,4 @@
+import SwiftDiagnostics
 import SwiftSyntax
 import SwiftSyntaxBuilder
 import SwiftSyntaxMacros
@@ -19,6 +20,14 @@ public struct MockableMacro: PeerMacro {
         let protocolName = proto.name.text
         let mockName = "Mock\(protocolName)"
         let access = accessKeyword(for: proto.modifiers)
+        // Propagate a global actor (`@MainActor`, custom `@…Actor`) onto the mock so
+        // its isolation matches the protocol's; otherwise actor-isolated async
+        // requirements fail the Swift 6 `sending` check.
+        let globalActor = proto.attributes
+            .compactMap { $0.as(AttributeSyntax.self) }
+            .filter { $0.attributeName.trimmedDescription.hasSuffix("Actor") }
+            .map { "\($0.trimmedDescription) " }
+            .joined()
 
         // Disambiguate overloaded methods up front so handler/recording names
         // never collide, regardless of source order.
@@ -35,12 +44,21 @@ public struct MockableMacro: PeerMacro {
                     function,
                     memberPrefix: prefixes[functionIndex],
                     mockName: mockName,
-                    access: access
+                    access: access,
+                    globalActor: globalActor
                 ))
                 functionIndex += 1
             } else if let variable = item.decl.as(VariableDeclSyntax.self),
                       let member = propertyMembers(variable, mockName: mockName, access: access) {
                 members.append(member)
+            } else if let unsupported = unsupportedMemberDescription(item.decl) {
+                // Warn clearly rather than leave a confusing "does not conform" error.
+                context.diagnose(Diagnostic(
+                    node: item.decl,
+                    message: MimicDiagnostic(
+                        "@Mockable doesn't generate \(unsupported) yet, so \(mockName) won't conform until you add one by hand."
+                    )
+                ))
             }
         }
 
@@ -62,11 +80,12 @@ public struct MockableMacro: PeerMacro {
             .map { $0.isEmpty ? "" : "    \($0)" }
             .joined(separator: "\n")
 
+        // Omit the body block entirely for a member-less protocol so the mock
+        // doesn't carry trailing blank lines.
+        let bodyBlock = body.isEmpty ? "" : "\n\n\(body)"
         let mock: DeclSyntax = """
-        \(raw: access)final class \(raw: mockName): \(raw: protocolName) {
-            \(raw: access)init() {}
-
-        \(raw: body)
+        \(raw: globalActor)\(raw: access)final class \(raw: mockName): \(raw: protocolName) {
+            \(raw: access)init() {}\(raw: bodyBlock)
         }
         """
         return [mock]
@@ -100,7 +119,8 @@ private func functionMembers(
     _ function: FunctionDeclSyntax,
     memberPrefix: String,
     mockName: String,
-    access: String
+    access: String,
+    globalActor: String
 ) -> GeneratedMember {
     let name = function.name.text
     let signature = function.signature
@@ -195,8 +215,10 @@ private func functionMembers(
     // Closure / handler type, e.g. `((Int, String) async throws -> Bool)?`.
     // Parameter attributes like `@escaping` are stripped — they're illegal inside
     // a stored function type, but completion-handler params still work.
+    // When the protocol is actor-isolated, the handler closure carries the same
+    // isolation so on-actor arguments aren't "sent" to a nonisolated callee.
     let closureParams = params.map(\.bareType).joined(separator: ", ")
-    let handlerType = "((\(closureParams))\(effects) -> \(handlerReturn))?"
+    let handlerType = "(\(globalActor)(\(closureParams))\(effects) -> \(handlerReturn))?"
 
     // Call-recording storage.
     var storage = """
@@ -547,6 +569,23 @@ private extension String {
 }
 
 // MARK: - Diagnostics
+
+/// Describes a protocol requirement `@Mockable` doesn't generate, or `nil` if the
+/// member needs no warning (e.g. a nested type the mock can simply ignore).
+private func unsupportedMemberDescription(_ decl: DeclSyntax) -> String? {
+    if decl.is(SubscriptDeclSyntax.self) { return "`subscript` requirements" }
+    if decl.is(InitializerDeclSyntax.self) { return "`init` requirements" }
+    if decl.is(AssociatedTypeDeclSyntax.self) { return "`associatedtype` requirements" }
+    return nil
+}
+
+private struct MimicDiagnostic: DiagnosticMessage {
+    let message: String
+    let diagnosticID = MessageID(domain: "Mimic", id: "unsupported-requirement")
+    let severity: DiagnosticSeverity = .warning
+
+    init(_ message: String) { self.message = message }
+}
 
 enum MimicError: Error, CustomStringConvertible {
     case notAProtocol

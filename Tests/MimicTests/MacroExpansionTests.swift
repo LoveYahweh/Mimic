@@ -159,6 +159,36 @@ final class MacroExpansionTests: XCTestCase {
         )
     }
 
+    func testWarnsOnSubscriptRequirement() {
+        assertMacroExpansion(
+            """
+            @Mockable
+            protocol Store {
+                subscript(key: String) -> Int { get }
+            }
+            """,
+            expandedSource: """
+            protocol Store {
+                subscript(key: String) -> Int { get }
+            }
+
+            final class MockStore: Store {
+                init() {
+                }
+            }
+            """,
+            diagnostics: [
+                DiagnosticSpec(
+                    message: "@Mockable doesn't generate `subscript` requirements yet, so MockStore won't conform until you add one by hand.",
+                    line: 3,
+                    column: 5,
+                    severity: .warning
+                )
+            ],
+            macros: macros
+        )
+    }
+
     func testDiagnosesNonProtocol() {
         assertMacroExpansion(
             """
